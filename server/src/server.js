@@ -63,6 +63,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Public Frontend Client Config (exposes only public Supabase URL and anon publishable key)
+app.get('/api/config', (req, res) => {
+  res.json({
+    supabaseUrl: isSupabaseConfigured ? config.supabaseUrl : '',
+    supabasePublishableKey: isSupabaseConfigured ? config.supabasePublishableKey : '',
+  });
+});
+
 // Mount Routes
 app.use('/api/ai', aiRoutes);
 app.use('/api/foods', foodRoutes);

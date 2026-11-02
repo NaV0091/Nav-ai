@@ -12,7 +12,7 @@ dotenv.config(); // fallback to current working directory if different
 export const config = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
-  clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  clientOrigin: (process.env.CLIENT_ORIGIN || 'http://localhost:5173').replace(/\/+$/, ''),
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || '',
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || '',

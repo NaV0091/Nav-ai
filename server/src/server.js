@@ -18,20 +18,23 @@ const app = express();
 
 // Secure CORS configuration
 const allowedOrigins = [
-  config.clientOrigin,
+  config.clientOrigin?.replace(/\/+$/, ''),
+  'https://navai-zeta.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-];
+].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(cleanOrigin) || cleanOrigin.endsWith('.vercel.app')) {
         callback(null, true);
       } else {
-        callback(null, true); // Permissive in development for local network/mobile testing
+        callback(null, true); // Permissive for local network/mobile testing
       }
     },
     credentials: true,

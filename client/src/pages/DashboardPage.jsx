@@ -59,6 +59,8 @@ export default function DashboardPage() {
 
   // State
   const [selectedDate, setSelectedDate] = useState(() => getTodayDateString());
+  const todayDate = getTodayDateString();
+  const isToday = selectedDate === todayDate;
   const [meals, setMeals] = useState([]);
   const [goals, setGoals] = useState({
     calorie_target: 1200,
@@ -197,6 +199,10 @@ export default function DashboardPage() {
 
   // Add water helper
   const handleAddWaterMl = async (amountMl) => {
+    if (!isToday) {
+      showToast('Water can only be logged for today.', 'info');
+      return;
+    }
     try {
       if (user && isSupabaseConfigured) {
         const created = await createAuthenticatedWaterLog(user.id, amountMl, selectedDate);
@@ -219,6 +225,10 @@ export default function DashboardPage() {
 
   // Undo water helper
   const handleUndoWater = async () => {
+    if (!isToday) {
+      showToast('Cannot modify past records.', 'info');
+      return;
+    }
     if (!waterLogs.length) return;
     const lastLog = waterLogs[waterLogs.length - 1];
     try {
@@ -260,6 +270,10 @@ export default function DashboardPage() {
 
   // Steps handler
   const handleAddSteps = (count) => {
+    if (!isToday) {
+      showToast('Steps can only be logged for today.', 'info');
+      return;
+    }
     const updated = Math.max(0, stepsTaken + count);
     setStepsTaken(updated);
     try {
@@ -269,6 +283,10 @@ export default function DashboardPage() {
   };
 
   const handleSetExactSteps = (exactCount) => {
+    if (!isToday) {
+      showToast('Steps can only be logged for today.', 'info');
+      return;
+    }
     const parsed = parseInt(exactCount, 10);
     if (isNaN(parsed) || parsed < 0) {
       showToast('Please enter a valid step count', 'error');
@@ -304,6 +322,10 @@ export default function DashboardPage() {
 
   // Delete meal
   const handleDeleteMeal = async (mealId) => {
+    if (!isToday) {
+      showToast('Cannot delete historical meal records.', 'info');
+      return;
+    }
     if (!window.confirm('Delete this meal from your diary?')) return;
     try {
       if (user && isSupabaseConfigured) {
@@ -321,6 +343,10 @@ export default function DashboardPage() {
   // Quick Track Curated Meal Helper (from the Pancake or Almonds cards)
   const handleQuickTrackMeal = async (curatedItem, e) => {
     e.stopPropagation();
+    if (!isToday) {
+      showToast('Meals can only be logged for today. Switch to today to add meals.', 'info');
+      return;
+    }
     try {
       const mealRecord = {
         name: curatedItem.title,
@@ -406,8 +432,23 @@ export default function DashboardPage() {
 
   // SVG Gauge calculations
   const circumference = 2 * Math.PI * 46; // ~289.02
-  const gaugePercent = Math.min(100, (dailyNutrition.calories / goals.calorie_target) * 100);
+  const caloriesConsumed = Math.round(Number(dailyNutrition.calories ?? dailyNutrition.total_calories) || 0);
+  const calorieTarget = Number(goals.calorie_target) || 1200;
+  const gaugePercent = calorieTarget > 0 ? Math.min(100, Math.max(0, (caloriesConsumed / calorieTarget) * 100)) : 0;
   const strokeDashoffset = circumference - (circumference * gaugePercent) / 100;
+
+  // Macro Totals & Percentages (starts at 0% when no meals added, fills up as meals tracked)
+  const carbsConsumed = Math.round(Number(dailyNutrition.carbs ?? dailyNutrition.total_carbs_g) || 0);
+  const carbsTarget = Number(goals.carbs_target_g) || 165;
+  const carbsPercent = carbsTarget > 0 ? Math.min(100, Math.max(0, Math.round((carbsConsumed / carbsTarget) * 100))) : 0;
+
+  const proteinConsumed = Math.round(Number(dailyNutrition.protein ?? dailyNutrition.total_protein_g) || 0);
+  const proteinTarget = Number(goals.protein_target_g) || 65;
+  const proteinPercent = proteinTarget > 0 ? Math.min(100, Math.max(0, Math.round((proteinConsumed / proteinTarget) * 100))) : 0;
+
+  const fatConsumed = Math.round(Number(dailyNutrition.fat ?? dailyNutrition.total_fat_g) || 0);
+  const fatTarget = Number(goals.fat_target_g) || 35;
+  const fatPercent = fatTarget > 0 ? Math.min(100, Math.max(0, Math.round((fatConsumed / fatTarget) * 100))) : 0;
 
   // Curated meals preview items
   const pancakeRecipe = curatedRecipes[6]; // Banana Porridge Pancakes
@@ -447,17 +488,21 @@ export default function DashboardPage() {
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-1.5 sm:gap-2 mt-5 overflow-x-auto no-scrollbar py-1">
           {weekDays.map((item) => {
             const isSelected = item.dateStr === selectedDate;
+            const isTodayItem = item.dateStr === todayDate;
 
             return (
               <button
                 key={item.dateStr}
                 onClick={() => setSelectedDate(item.dateStr)}
-                className={`flex flex-col items-center justify-center flex-1 min-w-[46px] h-16 rounded-2xl transition-all ${
+                className={`flex flex-col items-center justify-center flex-1 min-w-[46px] h-16 rounded-2xl transition-all relative ${
                   isSelected
                     ? 'bg-[#18181B] text-white shadow-lg transform -translate-y-0.5'
                     : 'bg-white/80 backdrop-blur-xs text-[#6C7A72] border border-white/60 hover:bg-white hover:text-[#18181B]'
                 }`}
               >
+                {isTodayItem && !isSelected && (
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#006C4D]" title="Today" />
+                )}
                 <span className={`text-[13px] font-black ${isSelected ? 'text-white' : 'text-[#18181B]'}`}>
                   {item.dayNum}
                 </span>
@@ -474,6 +519,26 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Historical Date Notice if user selected a date other than today */}
+      {!isToday && (
+        <div className="flex items-center justify-between p-3.5 px-4 bg-[#FFF7ED] border border-[#FED7AA] rounded-2xl text-xs text-[#9A3412] shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold flex items-center gap-1.5">
+              🔒 Viewing {selectedDate} (History Mode)
+            </span>
+            <span className="hidden sm:inline text-[#C2410C]">
+              • Past & future dates are read-only.
+            </span>
+          </div>
+          <button
+            onClick={() => setSelectedDate(todayDate)}
+            className="px-3.5 py-1.5 bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-xs"
+          >
+            Switch to Today
+          </button>
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* 3. HERO NUTRITION CARD (Slide 1: Calorie Ring | Slide 2: Heart Health) */}
       {/* ============================================================== */}
@@ -485,7 +550,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-[#18181B]">
-                  Balanced Diet : {goals.calorie_target} Cal
+                  Balanced Diet : {calorieTarget} Cal
                 </h2>
                 <Link
                   to="/profile"
@@ -496,8 +561,10 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              <span className="text-[11px] font-bold px-3 py-1 bg-[#E8FBF0] text-[#006C4D] rounded-full">
-                {selectedDate === getTodayDateString() ? 'Today' : selectedDate}
+              <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${
+                isToday ? 'bg-[#E8FBF0] text-[#006C4D]' : 'bg-[#FFF7ED] text-[#EA580C]'
+              }`}>
+                {isToday ? 'Today' : `${selectedDate} (History)`}
               </span>
             </div>
 
@@ -511,7 +578,7 @@ export default function DashboardPage() {
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
                     <span className="text-2xl sm:text-3xl font-black text-[#18181B]">
-                      {dailyNutrition.calories}
+                      {caloriesConsumed}
                     </span>
                     <span className="text-xs text-[#8E8E93] font-semibold">Cal</span>
                   </div>
@@ -568,19 +635,19 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center text-[11px] font-bold text-[#6C7A72]">
                   <span>Carb</span>
                   <span className="text-[#225EAA]">
-                    {Math.round((dailyNutrition.carbs / (goals.carbs_target_g || 1)) * 100)}%
+                    {carbsPercent}%
                   </span>
                 </div>
                 <div className="w-full bg-[#EBF3FE] rounded-full h-1.5 mt-1 overflow-hidden">
                   <div
                     className="bg-[#38BDF8] h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min(100, (dailyNutrition.carbs / (goals.carbs_target_g || 1)) * 100)}%`,
+                      width: `${carbsPercent}%`,
                     }}
                   />
                 </div>
                 <span className="text-xs font-black text-[#18181B] mt-1">
-                  {dailyNutrition.carbs} <span className="text-[10px] font-medium text-[#8E8E93]">/ {goals.carbs_target_g}g</span>
+                  {carbsConsumed}g <span className="text-[10px] font-medium text-[#8E8E93]">/ {carbsTarget}g</span>
                 </span>
               </div>
 
@@ -589,19 +656,19 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center text-[11px] font-bold text-[#6C7A72]">
                   <span>Proteins</span>
                   <span className="text-[#006C4D]">
-                    {Math.round((dailyNutrition.protein / (goals.protein_target_g || 1)) * 100)}%
+                    {proteinPercent}%
                   </span>
                 </div>
                 <div className="w-full bg-[#E8FBF0] rounded-full h-1.5 mt-1 overflow-hidden">
                   <div
                     className="bg-[#34D399] h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min(100, (dailyNutrition.protein / (goals.protein_target_g || 1)) * 100)}%`,
+                      width: `${proteinPercent}%`,
                     }}
                   />
                 </div>
                 <span className="text-xs font-black text-[#18181B] mt-1">
-                  {dailyNutrition.protein} <span className="text-[10px] font-medium text-[#8E8E93]">/ {goals.protein_target_g}g</span>
+                  {proteinConsumed}g <span className="text-[10px] font-medium text-[#8E8E93]">/ {proteinTarget}g</span>
                 </span>
               </div>
 
@@ -610,19 +677,19 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center text-[11px] font-bold text-[#6C7A72]">
                   <span>Fat</span>
                   <span className="text-[#754F8A]">
-                    {Math.round((dailyNutrition.fat / (goals.fat_target_g || 1)) * 100)}%
+                    {fatPercent}%
                   </span>
                 </div>
                 <div className="w-full bg-[#F4EFFE] rounded-full h-1.5 mt-1 overflow-hidden">
                   <div
                     className="bg-[#C084FC] h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min(100, (dailyNutrition.fat / (goals.fat_target_g || 1)) * 100)}%`,
+                      width: `${fatPercent}%`,
                     }}
                   />
                 </div>
                 <span className="text-xs font-black text-[#18181B] mt-1">
-                  {dailyNutrition.fat} <span className="text-[10px] font-medium text-[#8E8E93]">/ {goals.fat_target_g}g</span>
+                  {fatConsumed}g <span className="text-[10px] font-medium text-[#8E8E93]">/ {fatTarget}g</span>
                 </span>
               </div>
             </div>
@@ -732,38 +799,53 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Water Add Row in Litres (No multiline wrapping, clean L removed from button) */}
-          <div
-            className="flex items-center gap-2 mt-3 pt-2 border-t border-[#DDD4FE]/60"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => handleAddWaterMl(250)}
-              className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#7C3AED] text-xs font-bold shadow-xs hover:bg-[#7C3AED] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
+          {isToday ? (
+            <div
+              className="flex items-center gap-2 mt-3 pt-2 border-t border-[#DDD4FE]/60"
+              onClick={(e) => e.stopPropagation()}
             >
-              <Plus className="w-3.5 h-3.5 shrink-0" /> 0.25
-            </button>
-            <button
-              onClick={() => handleAddWaterMl(500)}
-              className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#7C3AED] text-xs font-bold shadow-xs hover:bg-[#7C3AED] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" /> 0.5
-            </button>
-            <button
-              onClick={() => handleAddWaterMl(1000)}
-              className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#7C3AED] text-xs font-bold shadow-xs hover:bg-[#7C3AED] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" /> 1.0
-            </button>
-            {waterLogs.length > 0 && (
               <button
-                onClick={handleUndoWater}
-                className="px-2.5 py-1.5 rounded-xl bg-white/70 text-[#7C3AED] text-xs font-semibold hover:bg-white transition-all whitespace-nowrap"
-                title="Undo last log"
+                onClick={() => handleAddWaterMl(250)}
+                className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#7C3AED] text-xs font-bold shadow-xs hover:bg-[#7C3AED] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
               >
-                Undo
+                <Plus className="w-3.5 h-3.5 shrink-0" /> 0.25
               </button>
-            )}
-          </div>
+              <button
+                onClick={() => handleAddWaterMl(500)}
+                className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#7C3AED] text-xs font-bold shadow-xs hover:bg-[#7C3AED] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" /> 0.5
+              </button>
+              <button
+                onClick={() => handleAddWaterMl(1000)}
+                className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#7C3AED] text-xs font-bold shadow-xs hover:bg-[#7C3AED] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" /> 1.0
+              </button>
+              {waterLogs.length > 0 && (
+                <button
+                  onClick={handleUndoWater}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/70 text-[#7C3AED] text-xs font-semibold hover:bg-white transition-all whitespace-nowrap"
+                  title="Undo last log"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 pt-2 border-t border-[#DDD4FE]/60 flex items-center justify-between text-[11px] text-[#7C3AED]">
+              <span className="font-semibold flex items-center gap-1">🔒 Past record (Read-only)</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDate(todayDate);
+                }}
+                className="font-bold underline hover:text-[#5B21B6]"
+              >
+                Switch to Today
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tile 2: Sky Cyan Torch Those Cals Card */}
@@ -825,50 +907,86 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Step Buttons */}
-          <div
-            className="flex items-center gap-2 mt-3 pt-2 border-t border-[#FED7AA]/60"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => handleAddSteps(1000)}
-              className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#EA580C] text-xs font-bold shadow-xs hover:bg-[#EA580C] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95"
+          {isToday ? (
+            <div
+              className="flex items-center gap-2 mt-3 pt-2 border-t border-[#FED7AA]/60"
+              onClick={(e) => e.stopPropagation()}
             >
-              <Plus className="w-3.5 h-3.5" /> 1,000
-            </button>
-            <button
-              onClick={() => handleAddSteps(2500)}
-              className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#EA580C] text-xs font-bold shadow-xs hover:bg-[#EA580C] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95"
-            >
-              <Plus className="w-3.5 h-3.5" /> 2,500
-            </button>
-            <button
-              onClick={() => setShowStepsModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-white/80 text-[#431407] text-xs font-bold hover:bg-white transition-all"
-            >
-              Edit Goal
-            </button>
-          </div>
+              <button
+                onClick={() => handleAddSteps(1000)}
+                className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#EA580C] text-xs font-bold shadow-xs hover:bg-[#EA580C] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" /> 1,000
+              </button>
+              <button
+                onClick={() => handleAddSteps(2500)}
+                className="flex-1 py-1.5 px-2 rounded-xl bg-white text-[#EA580C] text-xs font-bold shadow-xs hover:bg-[#EA580C] hover:text-white transition-all flex items-center justify-center gap-1 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" /> 2,500
+              </button>
+              <button
+                onClick={() => setShowStepsModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-white/80 text-[#431407] text-xs font-bold hover:bg-white transition-all"
+              >
+                Edit Goal
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 pt-2 border-t border-[#FED7AA]/60 flex items-center justify-between text-[11px] text-[#C2410C]">
+              <span className="font-semibold flex items-center gap-1">🔒 Past record (Read-only)</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDate(todayDate);
+                }}
+                className="font-bold underline hover:text-[#9A3412]"
+              >
+                Switch to Today
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tile 4: Custard Yellow Jot Down Meals Card */}
-        <Link
-          to="/diary?action=add"
-          className="flex items-center justify-between p-4 rounded-3xl bg-[#FFF5D6] border border-[#FDE68A] shadow-xs group hover:bg-[#FFF0C2] transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#D97706]/15 flex items-center justify-center text-[#D97706] shrink-0 group-hover:scale-105 transition-transform">
-              <PenTool className="w-5 h-5 text-[#D97706]" />
+        {isToday ? (
+          <Link
+            to="/diary?action=add"
+            className="flex items-center justify-between p-4 rounded-3xl bg-[#FFF5D6] border border-[#FDE68A] shadow-xs group hover:bg-[#FFF0C2] transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#D97706]/15 flex items-center justify-center text-[#D97706] shrink-0 group-hover:scale-105 transition-transform">
+                <PenTool className="w-5 h-5 text-[#D97706]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-[#451A03]">Jot down meals</h3>
+                <p className="text-xs text-[#B45309] font-medium">Write your meals.</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-extrabold text-[#451A03]">Jot down meals</h3>
-              <p className="text-xs text-[#B45309] font-medium">Write your meals.</p>
-            </div>
-          </div>
 
-          <div className="w-8 h-8 rounded-full bg-white/80 group-hover:bg-white flex items-center justify-center text-[#D97706] shadow-xs transition-colors shrink-0">
-            <ChevronRight className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-full bg-white/80 group-hover:bg-white flex items-center justify-center text-[#D97706] shadow-xs transition-colors shrink-0">
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </Link>
+        ) : (
+          <div
+            onClick={() => setSelectedDate(todayDate)}
+            className="flex items-center justify-between p-4 rounded-3xl bg-[#FFF5D6] border border-[#FDE68A] shadow-xs group hover:bg-[#FFF0C2] transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#D97706]/15 flex items-center justify-center text-[#D97706] shrink-0">
+                <PenTool className="w-5 h-5 text-[#D97706]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-[#451A03]">Jot down meals</h3>
+                <p className="text-xs text-[#B45309] font-medium">Switch to Today to add meals</p>
+              </div>
+            </div>
+
+            <span className="text-xs font-bold text-[#D97706] bg-white/80 px-2.5 py-1 rounded-full">
+              Today →
+            </span>
           </div>
-        </Link>
+        )}
       </div>
 
       {/* ============================================================== */}
@@ -926,12 +1044,21 @@ export default function DashboardPage() {
             </Link>
 
             {/* Solid Dark Track Button */}
-            <button
-              onClick={(e) => handleQuickTrackMeal(pancakeRecipe, e)}
-              className="w-full py-2.5 rounded-2xl bg-[#101418] hover:bg-[#27272A] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-98"
-            >
-              <Plus className="w-4 h-4 text-[#34D399]" /> Track
-            </button>
+            {isToday ? (
+              <button
+                onClick={(e) => handleQuickTrackMeal(pancakeRecipe, e)}
+                className="w-full py-2.5 rounded-2xl bg-[#101418] hover:bg-[#27272A] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-98"
+              >
+                <Plus className="w-4 h-4 text-[#34D399]" /> Track
+              </button>
+            ) : (
+              <button
+                onClick={() => setSelectedDate(todayDate)}
+                className="w-full py-2.5 rounded-2xl bg-[#F4F4F5] hover:bg-[#E4E4E7] text-[#71717A] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                Switch to Today to Track
+              </button>
+            )}
           </div>
 
           {/* Card 2: Morning Snacks Almonds (With guaranteed 200 OK image & clickable recipe link!) */}
@@ -973,12 +1100,21 @@ export default function DashboardPage() {
             </Link>
 
             {/* Solid Dark Track Button */}
-            <button
-              onClick={(e) => handleQuickTrackMeal(almondsRecipe, e)}
-              className="w-full py-2.5 rounded-2xl bg-[#101418] hover:bg-[#27272A] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-98"
-            >
-              <Plus className="w-4 h-4 text-[#34D399]" /> Track
-            </button>
+            {isToday ? (
+              <button
+                onClick={(e) => handleQuickTrackMeal(almondsRecipe, e)}
+                className="w-full py-2.5 rounded-2xl bg-[#101418] hover:bg-[#27272A] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-98"
+              >
+                <Plus className="w-4 h-4 text-[#34D399]" /> Track
+              </button>
+            ) : (
+              <button
+                onClick={() => setSelectedDate(todayDate)}
+                className="w-full py-2.5 rounded-2xl bg-[#F4F4F5] hover:bg-[#E4E4E7] text-[#71717A] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                Switch to Today to Track
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1028,13 +1164,19 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <Link
-                    to={`/diary?action=add&meal_type=${sec.key}`}
-                    className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-[#18181B] hover:bg-[#101418] hover:text-white transition-colors shadow-xs"
-                    title={`Log food to ${sec.label}`}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Link>
+                  {isToday ? (
+                    <Link
+                      to={`/diary?action=add&meal_type=${sec.key}`}
+                      className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-[#18181B] hover:bg-[#101418] hover:text-white transition-colors shadow-xs"
+                      title={`Log food to ${sec.label}`}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Link>
+                  ) : (
+                    <span className="text-[10px] font-bold text-[#8E8E93] bg-white/70 px-2 py-0.5 rounded-full">
+                      History
+                    </span>
+                  )}
                 </div>
 
                 {/* Progress bar */}
@@ -1079,13 +1221,15 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleDeleteMeal(meal.id)}
-                          className="w-7 h-7 flex items-center justify-center rounded-full text-[#8E8E93] hover:text-[#BA1A1A] hover:bg-red-50 transition-colors shrink-0"
-                          title="Delete meal"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {isToday && (
+                          <button
+                            onClick={() => handleDeleteMeal(meal.id)}
+                            className="w-7 h-7 flex items-center justify-center rounded-full text-[#8E8E93] hover:text-[#BA1A1A] hover:bg-red-50 transition-colors shrink-0"
+                            title="Delete meal"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     ))
                   )}
@@ -1126,57 +1270,74 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Add Water Section */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
-                Quick Log Water (Litres)
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[0.25, 0.5, 0.75, 1.0].map((amt) => (
-                  <button
-                    key={amt}
-                    onClick={() => handleAddWaterMl(Math.round(amt * 1000))}
-                    className="py-2.5 rounded-xl bg-[#EAE5FF] hover:bg-[#7C3AED] hover:text-white text-[#7C3AED] text-xs font-black transition-colors"
-                  >
-                    +{amt.toFixed(2)} L
-                  </button>
-                ))}
-                <button
-                  onClick={handleUndoWater}
-                  className="py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-[#18181B] text-xs font-bold transition-colors col-span-2 flex items-center justify-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Undo Last
-                </button>
-              </div>
-            </div>
-
-            {/* Custom Log Water Input */}
-            <div className="flex flex-col gap-1.5 pt-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
-                Custom Water Amount
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  step="0.1"
-                  value={customWaterInputL}
-                  onChange={(e) => setCustomWaterInputL(e.target.value)}
-                  placeholder="e.g. 0.35 L"
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-[#F8FAF8] border border-[#DDD4FE] text-xs font-bold text-[#18181B] focus:outline-none focus:border-[#7C3AED]"
-                />
+            {!isToday ? (
+              <div className="p-3 bg-[#FFF7ED] border border-[#FED7AA] rounded-2xl text-xs text-[#9A3412] flex items-center justify-between">
+                <span>🔒 Water can only be logged for today.</span>
                 <button
                   onClick={() => {
-                    const l = parseFloat(customWaterInputL);
-                    if (l > 0) {
-                      handleAddWaterMl(Math.round(l * 1000));
-                      setCustomWaterInputL('');
-                    }
+                    setSelectedDate(todayDate);
+                    setShowWaterModal(false);
                   }}
-                  className="px-4 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-black rounded-xl"
+                  className="font-bold underline"
                 >
-                  Add
+                  Switch to Today
                 </button>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
+                    Quick Log Water (Litres)
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[0.25, 0.5, 0.75, 1.0].map((amt) => (
+                      <button
+                        key={amt}
+                        onClick={() => handleAddWaterMl(Math.round(amt * 1000))}
+                        className="py-2.5 rounded-xl bg-[#EAE5FF] hover:bg-[#7C3AED] hover:text-white text-[#7C3AED] text-xs font-black transition-colors"
+                      >
+                        +{amt.toFixed(2)} L
+                      </button>
+                    ))}
+                    <button
+                      onClick={handleUndoWater}
+                      className="py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-[#18181B] text-xs font-bold transition-colors col-span-2 flex items-center justify-center gap-1"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Undo Last
+                    </button>
+                  </div>
+                </div>
+
+                {/* Custom Log Water Input */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
+                    Custom Water Amount
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={customWaterInputL}
+                      onChange={(e) => setCustomWaterInputL(e.target.value)}
+                      placeholder="e.g. 0.35 L"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-[#F8FAF8] border border-[#DDD4FE] text-xs font-bold text-[#18181B] focus:outline-none focus:border-[#7C3AED]"
+                    />
+                    <button
+                      onClick={() => {
+                        const l = parseFloat(customWaterInputL);
+                        if (l > 0) {
+                          handleAddWaterMl(Math.round(l * 1000));
+                          setCustomWaterInputL('');
+                        }
+                      }}
+                      className="px-4 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-black rounded-xl"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Edit Daily Water Target (In Litres) */}
             <div className="flex flex-col gap-2 pt-2 border-t border-[#EAE5FF]">
@@ -1253,54 +1414,71 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Add Steps */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
-                Log Steps Taken Today
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[500, 1000, 2500, 5000].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleAddSteps(s)}
-                    className="py-2.5 rounded-xl bg-[#FFE8D6] hover:bg-[#EA580C] hover:text-white text-[#EA580C] text-xs font-black transition-colors"
-                  >
-                    +{s.toLocaleString()} steps
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Set Exact Steps or Custom Input */}
-            <div className="flex flex-col gap-1.5 pt-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
-                Or Set Exact Step Count
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={customStepsInput}
-                  onChange={(e) => setCustomStepsInput(e.target.value)}
-                  placeholder="e.g. 4500"
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-[#F8FAF8] border border-[#FED7AA] text-xs font-bold text-[#18181B] focus:outline-none focus:border-[#EA580C]"
-                />
+            {!isToday ? (
+              <div className="p-3 bg-[#FFF7ED] border border-[#FED7AA] rounded-2xl text-xs text-[#9A3412] flex items-center justify-between">
+                <span>🔒 Steps can only be logged for today.</span>
                 <button
                   onClick={() => {
-                    handleSetExactSteps(customStepsInput);
-                    setCustomStepsInput('');
+                    setSelectedDate(todayDate);
+                    setShowStepsModal(false);
                   }}
-                  className="px-4 py-2 bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-black rounded-xl"
+                  className="font-bold underline"
                 >
-                  Set
-                </button>
-                <button
-                  onClick={() => handleSetExactSteps(0)}
-                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl"
-                  title="Reset to 0"
-                >
-                  Reset
+                  Switch to Today
                 </button>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
+                    Log Steps Taken Today
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[500, 1000, 2500, 5000].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => handleAddSteps(s)}
+                        className="py-2.5 rounded-xl bg-[#FFE8D6] hover:bg-[#EA580C] hover:text-white text-[#EA580C] text-xs font-black transition-colors"
+                      >
+                        +{s.toLocaleString()} steps
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Set Exact Steps or Custom Input */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#6C7A72]">
+                    Or Set Exact Step Count
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={customStepsInput}
+                      onChange={(e) => setCustomStepsInput(e.target.value)}
+                      placeholder="e.g. 4500"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-[#F8FAF8] border border-[#FED7AA] text-xs font-bold text-[#18181B] focus:outline-none focus:border-[#EA580C]"
+                    />
+                    <button
+                      onClick={() => {
+                        handleSetExactSteps(customStepsInput);
+                        setCustomStepsInput('');
+                      }}
+                      className="px-4 py-2 bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-black rounded-xl"
+                    >
+                      Set
+                    </button>
+                    <button
+                      onClick={() => handleSetExactSteps(0)}
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl"
+                      title="Reset to 0"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Edit Daily Step Goal */}
             <div className="flex flex-col gap-2 pt-2 border-t border-[#FFE8D6]">

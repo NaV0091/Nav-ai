@@ -31,16 +31,46 @@ export function calculateItemNutrition(food, quantityGrams) {
  * @returns {Object} Total macros and calories
  */
 export function calculateMealTotals(items = []) {
-  return items.reduce(
+  const totals = (items || []).reduce(
     (acc, item) => {
-      acc.total_calories += Number(item.calories) || 0;
-      acc.total_protein_g += Number(item.protein_g) || 0;
-      acc.total_carbs_g += Number(item.carbs_g) || 0;
-      acc.total_fat_g += Number(item.fat_g) || 0;
+      const c = Number(item.total_calories ?? item.calories) || 0;
+      const p = Number(item.total_protein_g ?? item.protein_g ?? item.protein) || 0;
+      const cb = Number(item.total_carbs_g ?? item.carbs_g ?? item.carbs) || 0;
+      const f = Number(item.total_fat_g ?? item.fat_g ?? item.fat) || 0;
+
+      acc.calories += c;
+      acc.protein += p;
+      acc.carbs += cb;
+      acc.fat += f;
+
+      acc.total_calories += c;
+      acc.total_protein_g += p;
+      acc.total_carbs_g += cb;
+      acc.total_fat_g += f;
       return acc;
     },
-    { total_calories: 0, total_protein_g: 0, total_carbs_g: 0, total_fat_g: 0 }
+    {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      total_calories: 0,
+      total_protein_g: 0,
+      total_carbs_g: 0,
+      total_fat_g: 0,
+    }
   );
+
+  return {
+    calories: Math.round(totals.calories),
+    protein: Math.round(totals.protein * 10) / 10,
+    carbs: Math.round(totals.carbs * 10) / 10,
+    fat: Math.round(totals.fat * 10) / 10,
+    total_calories: Math.round(totals.calories),
+    total_protein_g: Math.round(totals.protein * 10) / 10,
+    total_carbs_g: Math.round(totals.carbs * 10) / 10,
+    total_fat_g: Math.round(totals.fat * 10) / 10,
+  };
 }
 
 /**

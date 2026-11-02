@@ -25,6 +25,11 @@ fs.copyFileSync(serverFile, path.join(distDir, 'server.js'));
 const clientDir = path.join(__dirname, '../client');
 if (fs.existsSync(clientDir)) {
   try {
+    const clientModules = path.join(clientDir, 'node_modules');
+    if (!fs.existsSync(clientModules)) {
+      console.log('Installing client dependencies on Vercel...');
+      execSync('npm install --no-audit --prefer-offline', { cwd: clientDir, stdio: 'inherit' });
+    }
     console.log('Building client frontend for static serving...');
     execSync('npm run build', { cwd: clientDir, stdio: 'inherit' });
     const clientDist = path.join(clientDir, 'dist');

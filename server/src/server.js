@@ -1,7 +1,12 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { config, isSupabaseConfigured, isGeminiConfigured } from './config/env.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Route imports
 import aiRoutes from './routes/aiRoutes.js';
@@ -68,6 +73,24 @@ app.use('/api/weight', weightRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/guest', guestRoutes);
+
+// Serve static frontend website when built (for unified full-stack deployments)
+const candidateDistPaths = [
+  path.resolve(__dirname, '../../client/dist'),
+  path.resolve(__dirname, '../client/dist'),
+  path.resolve(__dirname, './public'),
+  path.resolve(__dirname, '../public'),
+  path.resolve(__dirname, '../../dist'),
+];
+const clientDistPath = candidateDistPaths.find((p) => fs.existsSync(path.join(p, 'index.html')));
+
+if (clientDistPath) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // 404 Fallback
 app.use((req, res) => {

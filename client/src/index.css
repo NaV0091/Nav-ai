@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --color-primary: #006C4D;
+  --color-primary-container: #34C795;
+  --color-primary-fixed: #72FBC5;
+  --color-primary-light: #A8E8BD;
+
+  --color-secondary: #225EAA;
+  --color-secondary-container: #79ACFD;
+  --color-secondary-fixed: #D6E3FF;
+
+  --color-tertiary: #754F8A;
+  --color-tertiary-container: #CDA1E2;
+  --color-tertiary-fixed: #F5D9FF;
+
+  --color-accent-peach: #FDBA8C;
+  --color-accent-orange: #EA580C;
+  --color-accent-fire: #F97316;
+
+  --color-surface: #ECFEF4;
+  --color-surface-muted: #F8F5EF;
+  --color-surface-container: #E0F2E8;
+  --color-surface-container-low: #E6F8EE;
+  --color-surface-container-high: #DBECE3;
+  --color-surface-container-lowest: #FFFFFF;
+
+  --color-on-surface: #101E19;
+  --color-on-surface-variant: #6C7A72;
+  --color-outline: #6C7A72;
+  --color-outline-variant: #BBCAC1;
+
+  --color-inverse-surface: #1B2A24;
+  --color-inverse-on-surface: #E3F5EB;
+
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-3xl: 2.5rem;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  * {
+    border-color: #E2EFE7;
+  }
+  body {
+    font-family: var(--font-sans);
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    background-color: #F8FAF8;
+    color: #181E1C;
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1.25rem);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* Custom organic wave background representing the vibrant mint header from the screenshot */
+.mint-mesh-header {
+  background: linear-gradient(180deg, #A8F0C6 0%, #C8F6DE 30%, #E6FAF0 65%, #F8FAF8 100%);
+}
+
+.mint-soft-glow {
+  background: radial-gradient(circle at 50% 0%, #99F6C4 0%, #D8FBE9 45%, transparent 75%);
+}
+
+/* Custom utility for hiding scrollbar while preserving scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

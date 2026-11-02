@@ -1,0 +1,16 @@
+{
+  "name": "nav-ai-root",
+  "version": "1.0.0",
+  "description": "Nav AI Full-Stack Nutrition & Fitness Platform",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix client run build",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "server:dev": "npm --prefix server run dev",
+    "server:start": "npm --prefix server start",
+    "server:test": "npm --prefix server run test"
+  }
+}
+

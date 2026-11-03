@@ -25,6 +25,8 @@ const app = express();
 const allowedOrigins = [
   config.clientOrigin?.replace(/\/+$/, ''),
   'https://navai-zeta.vercel.app',
+  'https://nav-ai-0091.web.app',
+  'https://nav-ai-0091.firebaseapp.com',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',

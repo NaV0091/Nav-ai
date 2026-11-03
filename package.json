@@ -10,7 +10,8 @@
     "client:build": "npm --prefix client run build",
     "server:dev": "npm --prefix server run dev",
     "server:start": "npm --prefix server start",
-    "server:test": "npm --prefix server run test"
+    "server:test": "npm --prefix server run test",
+    "deploy:firebase": "npm --prefix client run build && npx --package=firebase-tools firebase deploy --only hosting"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",

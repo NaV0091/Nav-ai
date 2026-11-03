@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Sparkles, ArrowRight, Lock, Mail, AlertCircle, Info, ShieldCheck } from 'lucide-react';
+import { Sparkles, ArrowRight, Lock, Mail, AlertCircle, Info, RefreshCw, CheckCircle2 } from 'lucide-react';
+import GoogleSetupModal from '../components/auth/GoogleSetupModal';
 
 export default function LoginPage() {
-  const { login, loginGoogle, enterGuestMode, isSupabaseConfigured } = useAuth();
+  const { login, loginGoogle, enterGuestMode, isSupabaseConfigured, resendConfirmationEmail } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -13,10 +14,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isEmailUnconfirmed, setIsEmailUnconfirmed] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setIsEmailUnconfirmed(false);
+    setResendSent(false);
+
     if (!email || !password) {
       setErrorMessage('Please enter both email and password.');
       return;
@@ -28,17 +36,58 @@ export default function LoginPage() {
       showToast('Welcome back to Nav AI!', 'success');
       navigate('/dashboard');
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to sign in. Please verify your credentials.');
+      const msg = err.message || '';
+      if (
+        err.isGoogleDisabled ||
+        err.code === 'GOOGLE_PROVIDER_DISABLED' ||
+        msg.toLowerCase().includes('not enabled') ||
+        msg.toLowerCase().includes('validation_failed')
+      ) {
+        setShowGoogleModal(true);
+      } else if (msg.toLowerCase().includes('email not confirmed')) {
+        setIsEmailUnconfirmed(true);
+        setErrorMessage(
+          'Your email address has not been confirmed yet. Please check your inbox (and spam folder) or resend the link below.'
+        );
+      } else if (msg.toLowerCase().includes('invalid login credentials')) {
+        setErrorMessage('Incorrect email or password. Please verify your credentials or register a new account.');
+      } else {
+        setErrorMessage(msg || 'Failed to sign in. Please verify your credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResend = async () => {
+    if (!email) return;
+    try {
+      setResendingEmail(true);
+      await resendConfirmationEmail(email);
+      setResendSent(true);
+      showToast('Confirmation email resent! Check your inbox.', 'info');
+    } catch (err) {
+      showToast(err.message || 'Failed to resend confirmation email.', 'error');
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
+    setErrorMessage('');
     try {
       await loginGoogle();
     } catch (err) {
-      setErrorMessage(err.message || 'Google sign-in is not configured.');
+      if (
+        err.isGoogleDisabled ||
+        err.code === 'GOOGLE_PROVIDER_DISABLED' ||
+        err.message?.toLowerCase().includes('not enabled') ||
+        err.message?.toLowerCase().includes('validation_failed')
+      ) {
+        setShowGoogleModal(true);
+      } else {
+        setErrorMessage(err.message || 'Google sign-in is not configured.');
+      }
     }
   };
 
@@ -52,7 +101,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-xl border border-[#D5E7DD]">
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-8">
-          <Link to="/" className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#006C4D] to-[#34C795] flex items-center justify-center text-white shadow-md shadow-[#34C795]/20 mb-3">
+          <Link
+            to="/"
+            className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#006C4D] to-[#34C795] flex items-center justify-center text-white shadow-md shadow-[#34C795]/20 mb-3"
+          >
             <Sparkles className="w-6 h-6" />
           </Link>
           <h2 className="text-2xl font-extrabold text-[#101E19]">Welcome Back</h2>
@@ -74,9 +126,27 @@ export default function LoginPage() {
         )}
 
         {errorMessage && (
-          <div className="mb-6 p-3 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#BA1A1A] flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMessage}</span>
+          <div className="mb-6 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#BA1A1A] space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span>{errorMessage}</span>
+              </div>
+            </div>
+
+            {isEmailUnconfirmed && (
+              <div className="pt-2 border-t border-red-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  disabled={resendingEmail || resendSent}
+                  onClick={handleResend}
+                  className="font-bold underline text-[#006C4D] hover:text-[#004E37] flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${resendingEmail ? 'animate-spin' : ''}`} />
+                  <span>{resendSent ? 'Email Resent!' : resendingEmail ? 'Sending...' : 'Resend confirmation email'}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -141,7 +211,7 @@ export default function LoginPage() {
           <button
             onClick={handleGoogleSignIn}
             type="button"
-            className="w-full py-3 rounded-full bg-white border border-[#D5E7DD] hover:bg-[#F8FCF9] text-sm font-semibold text-[#101E19] flex items-center justify-center gap-2 transition-colors shadow-xs"
+            className="w-full py-3 rounded-full bg-white border border-[#D5E7DD] hover:bg-[#F8FCF9] text-sm font-semibold text-[#101E19] flex items-center justify-center gap-2.5 transition-colors shadow-xs"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -181,7 +251,9 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
+
+      {/* Google Setup Guide Modal */}
+      <GoogleSetupModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} />
     </div>
   );
 }
-

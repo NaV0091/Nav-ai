@@ -8,6 +8,7 @@ import {
   signOutUser,
   getSession,
   onAuthStateChange,
+  resendConfirmationEmail,
 } from '../services/supabaseClient';
 import { exportGuestData, clearAllGuestData } from '../services/guestStorage';
 import { importGuestData as apiImportGuestData } from '../services/apiClient';
@@ -86,8 +87,12 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (email, password, displayName) => {
     const data = await signUpWithEmail(email, password, displayName);
-    setIsGuest(false);
-    localStorage.removeItem('navai_mode');
+    if (data?.session) {
+      setSession(data.session);
+      setUser(data.session.user);
+      setIsGuest(false);
+      localStorage.removeItem('navai_mode');
+    }
     return data;
   }, []);
 
@@ -136,6 +141,7 @@ export function AuthProvider({ children }) {
     register,
     loginGoogle,
     logout,
+    resendConfirmationEmail,
     migrateGuestData,
   };
 

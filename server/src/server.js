@@ -18,6 +18,7 @@ import weightRoutes from './routes/weightRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
 import guestRoutes from './routes/guestRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use('/api/weight', weightRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/guest', guestRoutes);
+app.use('/api/auth', authRoutes);
 
 // Serve static frontend website when built (for unified full-stack deployments)
 const candidateDistPaths = [

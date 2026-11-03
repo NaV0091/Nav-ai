@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "nav-ai",
     "public": "client/dist",
     "ignore": [
       "firebase.json",

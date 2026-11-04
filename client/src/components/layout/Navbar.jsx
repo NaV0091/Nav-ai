@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { downloadAppUrlShortcut } from '../../utils/installShortcut';
+import { triggerAppInstall } from '../../utils/installShortcut';
 
 export default function Navbar() {
   const { user, isGuest, isSupabaseConfigured, logout } = useAuth();
@@ -142,15 +142,23 @@ export default function Navbar() {
                   </Link>
 
                   <button
-                    onClick={() => {
-                      downloadAppUrlShortcut('Nav AI');
-                      showToast('Nav AI app shortcut (.url) downloaded to your device!', 'success');
+                    onClick={async () => {
                       setShowProfileDropdown(false);
+                      const res = await triggerAppInstall();
+                      if (res?.outcome === 'accepted') {
+                        showToast('Nav AI installed successfully!', 'success');
+                      } else if (res?.type === 'ios_guide') {
+                        showToast('Tap Share (↑) in Safari, then select "Add to Home Screen".', 'info');
+                      } else if (res?.type === 'desktop_guide') {
+                        showToast('Click the Install icon (⊞) in your address bar (top right).', 'info');
+                      } else if (res?.type === 'mobile_guide') {
+                        showToast('Tap menu (⋮) and select "Install app" or "Add to Home screen".', 'info');
+                      }
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#006C4D] hover:bg-[#E0F2E8] rounded-xl transition-colors font-semibold text-left"
                   >
                     <Download className="w-4 h-4 text-[#006C4D]" />
-                    Install App (.url)
+                    Install App
                   </button>
 
                   <div className="pt-1 border-t border-[#E0F2E8] mt-1">

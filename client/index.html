@@ -16,6 +16,9 @@
         window.__navai_deferred_prompt = e;
         window.dispatchEvent(new CustomEvent('navai:pwa-ready'));
       });
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+      }
     </script>
     <meta name="theme-color" content="#006C4D" />
     <meta name="mobile-web-app-capable" content="yes" />

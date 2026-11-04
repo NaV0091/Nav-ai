@@ -1,9 +1,11 @@
 /**
- * Cross-device App Shortcut & Installation utility
+ * Universal App Shortcut & Installation utility
  * Supports:
- * - Android Phones & Tablets (PWA Add to Home Screen -> Real app shortcut)
- * - Windows PC & Desktop (PWA Install App -> Native Desktop Shortcut + Start Menu, and server-hosted .url)
- * - iPhone & iPad (iOS Home Screen guide)
+ * - Windows PC & Desktop: Native PWA install (creates Desktop .lnk shortcut & Start Menu entry) + address bar (⊞) guide
+ * - Android Phones & Tablets: Native PWA install (places app icon directly on home screen)
+ * - iPhone & iPad: Safari Share (↑) -> Add to Home Screen guide
+ * 
+ * Never downloads .url files through JavaScript, preventing browser security .download renaming.
  */
 
 export function getDeferredPrompt() {
@@ -25,52 +27,80 @@ export function isMobileOrTablet() {
   return /android|iphone|ipad|ipod|tablet|mobile/.test(ua);
 }
 
-export async function triggerAppInstall(name = 'Nav AI') {
-  const promptEvent = getDeferredPrompt();
+export function isStandaloneApp() {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true ||
+    localStorage.getItem('navai_app_installed') === 'true'
+  );
+}
 
-  // 1. If PWA installation is supported (Android phone/tablet, Chrome/Edge on Windows & Mac)
+export async function triggerAppInstall() {
+  let promptEvent = getDeferredPrompt();
+
+  // If prompt not yet available, wait briefly for navai:pwa-ready event
+  if (!promptEvent && typeof window !== 'undefined') {
+    promptEvent = await new Promise((resolve) => {
+      let resolved = false;
+      const handler = () => {
+        if (!resolved) {
+          resolved = true;
+          window.removeEventListener('navai:pwa-ready', handler);
+          resolve(getDeferredPrompt());
+        }
+      };
+      window.addEventListener('navai:pwa-ready', handler);
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          window.removeEventListener('navai:pwa-ready', handler);
+          resolve(getDeferredPrompt());
+        }
+      }, 500);
+    });
+  }
+
+  // 1. Native PWA installation (Supported on Chrome/Edge on Windows, Android phones & tablets)
   if (promptEvent) {
     try {
       await promptEvent.prompt();
       const choice = await promptEvent.userChoice;
-      if (choice.outcome === 'accepted') {
+      if (choice && choice.outcome === 'accepted') {
         localStorage.setItem('navai_app_installed', 'true');
         window.__navai_deferred_prompt = null;
-        return { success: true, type: 'pwa' };
+        return { success: true, type: 'pwa', outcome: 'accepted' };
       }
-      return { success: false, type: 'dismissed' };
+      return { success: false, type: 'pwa', outcome: 'dismissed' };
     } catch (err) {
-      console.warn('PWA prompt error:', err);
+      console.warn('PWA install prompt error:', err);
     }
   }
 
-  // 2. On PC / Desktop: download the server-hosted .url shortcut file with application/x-mswinurl headers
-  if (!isMobileOrTablet()) {
-    try {
-      const link = document.createElement('a');
-      link.href = '/Nav-AI.url';
-      link.download = `${name}.url`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      localStorage.setItem('navai_app_installed', 'true');
-      return { success: true, type: 'url_shortcut' };
-    } catch (err) {
-      console.warn('Static shortcut download error:', err);
-    }
-  }
-
-  // 3. For iOS devices
+  // 2. iOS devices (Safari)
   if (isIosDevice()) {
-    return { success: false, type: 'ios_guide' };
+    return {
+      success: false,
+      type: 'ios_guide',
+      message: 'Tap the Share icon (↑) in Safari and choose "Add to Home Screen".'
+    };
   }
 
-  // 4. Android phone/tab without prompt event
+  // 3. Android phone/tablet fallback if prompt is not triggered
   if (isMobileOrTablet()) {
-    return { success: false, type: 'mobile_menu_guide' };
+    return {
+      success: false,
+      type: 'mobile_guide',
+      message: 'Tap the browser menu (⋮) at top right and select "Install app" or "Add to Home screen".'
+    };
   }
 
-  return { success: true, type: 'generic' };
+  // 4. Windows PC / Desktop fallback
+  return {
+    success: false,
+    type: 'desktop_guide',
+    message: 'Click the Install icon (⊞) in your browser address bar (top right) or browser menu (⋮) -> Install Nav AI.'
+  };
 }
 
 // Backward compatibility alias

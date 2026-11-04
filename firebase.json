@@ -19,15 +19,15 @@
           ]
         },
         {
-          "source": "**/*.url",
+          "source": "/sw.js",
           "headers": [
             {
-              "key": "Content-Type",
-              "value": "application/x-mswinurl"
+              "key": "Cache-Control",
+              "value": "max-age=0, no-cache, no-store, must-revalidate"
             },
             {
-              "key": "Content-Disposition",
-              "value": "attachment; filename=\"Nav AI.url\""
+              "key": "Service-Worker-Allowed",
+              "value": "/"
             }
           ]
         }

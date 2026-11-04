@@ -1,11 +1,12 @@
 {
-  "name": "Nav AI — AI Nutrition & Fitness",
+  "name": "Nav AI",
   "short_name": "Nav AI",
-  "description": "AI meal scanner, calorie tracking, and evidence-based nutrition coaching.",
+  "description": "AI meal scanner, calorie tracking, and offline nutrition platform.",
   "start_url": "/",
+  "id": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#F8FCF9",
   "theme_color": "#006C4D",
   "icons": [
@@ -13,13 +14,25 @@
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/favicon.svg",
@@ -29,4 +42,3 @@
     }
   ]
 }
-

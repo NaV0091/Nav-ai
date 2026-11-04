@@ -48,6 +48,7 @@ export default function RegisterPage() {
       const res = await register(email, password, displayName);
 
       if (res?.session) {
+        sessionStorage.setItem('navai_prompt_install', 'true');
         showToast('Account created successfully! Welcome to Nav AI.', 'success');
         navigate('/dashboard');
       } else {
@@ -86,6 +87,7 @@ export default function RegisterPage() {
 
   const handleGuest = () => {
     enterGuestMode();
+    sessionStorage.setItem('navai_prompt_install', 'true');
     navigate('/dashboard');
   };
 

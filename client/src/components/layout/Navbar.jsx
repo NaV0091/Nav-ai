@@ -16,11 +16,15 @@ import {
   X,
   PlusCircle,
   FileText,
+  Download,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { downloadAppUrlShortcut } from '../../utils/installShortcut';
 
 export default function Navbar() {
   const { user, isGuest, isSupabaseConfigured, logout } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [showMobileActionSheet, setShowMobileActionSheet] = useState(false);
@@ -136,6 +140,18 @@ export default function Navbar() {
                     <CalendarCheck className="w-4 h-4 text-[#006C4D]" />
                     My Diet Plans
                   </Link>
+
+                  <button
+                    onClick={() => {
+                      downloadAppUrlShortcut('Nav AI');
+                      showToast('Nav AI app shortcut (.url) downloaded to your device!', 'success');
+                      setShowProfileDropdown(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#006C4D] hover:bg-[#E0F2E8] rounded-xl transition-colors font-semibold text-left"
+                  >
+                    <Download className="w-4 h-4 text-[#006C4D]" />
+                    Install App (.url)
+                  </button>
 
                   <div className="pt-1 border-t border-[#E0F2E8] mt-1">
                     {user ? (

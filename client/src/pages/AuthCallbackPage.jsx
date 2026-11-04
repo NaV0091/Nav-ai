@@ -13,6 +13,7 @@ export default function AuthCallbackPage() {
           const { data, error } = await supabase.auth.getSession();
           if (error) throw error;
           if (data?.session) {
+            sessionStorage.setItem('navai_prompt_install', 'true');
             navigate('/dashboard');
             return;
           }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import Navbar from './Navbar';
+import InstallAppModal from '../InstallAppModal';
 import { useAuth } from '../../context/AuthContext';
 import { Sparkles, UserPlus } from 'lucide-react';
 
@@ -9,6 +10,9 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-[#F8FCF9] text-[#101E19] flex flex-col font-sans selection:bg-[#34C795]/20 selection:text-[#006C4D]">
+      {/* Install App Popup Modal */}
+      <InstallAppModal />
+
       {/* Guest Mode Notification Bar */}
       {isGuest && (
         <div className="bg-gradient-to-r from-[#FFF7E8] via-[#FFF2EB] to-[#FFF7E8] border-b border-[#FDBA8C]/40 px-4 py-2 text-xs text-[#101E19] flex items-center justify-between z-30">

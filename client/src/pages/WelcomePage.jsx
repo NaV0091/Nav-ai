@@ -19,6 +19,7 @@ export default function WelcomePage() {
 
   const handleContinueAsGuest = () => {
     enterGuestMode();
+    sessionStorage.setItem('navai_prompt_install', 'true');
     navigate('/dashboard');
   };
 

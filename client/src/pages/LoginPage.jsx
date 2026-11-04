@@ -33,6 +33,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       await login(email, password);
+      sessionStorage.setItem('navai_prompt_install', 'true');
       showToast('Welcome back to Nav AI!', 'success');
       navigate('/dashboard');
     } catch (err) {
@@ -93,6 +94,7 @@ export default function LoginPage() {
 
   const handleGuest = () => {
     enterGuestMode();
+    sessionStorage.setItem('navai_prompt_install', 'true');
     navigate('/dashboard');
   };
 

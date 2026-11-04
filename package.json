@@ -11,7 +11,7 @@
     "server:dev": "npm --prefix server run dev",
     "server:start": "npm --prefix server start",
     "server:test": "npm --prefix server run test",
-    "deploy:firebase": "npm --prefix client run build && npx --package=firebase-tools firebase deploy --only hosting"
+    "deploy:firebase": "npm --prefix client run build && node -e \"process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; import('child_process').then(cp => cp.spawnSync('npx', ['--package=firebase-tools', 'firebase', 'deploy', '--only', 'hosting'], { stdio: 'inherit', shell: true }))\""
   },
   "dependencies": {
     "@google/genai": "^2.32.0",

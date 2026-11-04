@@ -235,3 +235,101 @@ export function adjustRecipeServing(recipe, newServings) {
   };
 }
 
+/**
+ * Calculates nutrients for a portion ({ quantity, unit }, food)
+ */
+export function calculateItemNutrients(portion, food) {
+  const qty = Math.max(0, Number(portion?.quantity) || 100);
+  const factor = qty / 100.0;
+  return {
+    calories: Math.round((Number(food.calories_per_100g) || 0) * factor),
+    protein: Math.round((Number(food.protein_per_100g) || 0) * factor * 10) / 10,
+    carbs: Math.round((Number(food.carbs_per_100g) || 0) * factor * 10) / 10,
+    fat: Math.round((Number(food.fat_per_100g) || 0) * factor * 10) / 10,
+  };
+}
+
+/**
+ * Dynamic Heart Health Metric Engine
+ * Sums actual Saturated Fat, Sodium, and Cholesterol from logged meals.
+ * Starts at 0 when no meals are consumed for the selected day.
+ */
+export function calculateHeartHealthMetrics(meals = []) {
+  if (!meals || !Array.isArray(meals) || meals.length === 0) {
+    return {
+      saturatedFat: 0,
+      saturatedFatTarget: 20,
+      saturatedFatPercent: 0,
+      sodium: 0,
+      sodiumTarget: 2300,
+      sodiumPercent: 0,
+      cholesterol: 0,
+      cholesterolTarget: 300,
+      cholesterolPercent: 0,
+    };
+  }
+
+  let totalSatFat = 0;
+  let totalSodium = 0;
+  let totalCholesterol = 0;
+
+  for (const meal of meals) {
+    const items = meal.meal_items || meal.items || [];
+    if (items.length > 0) {
+      for (const item of items) {
+        const qty = Number(item.quantity) || 100;
+        const factor = qty / 100.0;
+
+        // Saturated Fat
+        let satFat = Number(item.saturated_fat_g ?? item.saturated_fat);
+        if (isNaN(satFat) || satFat === 0) {
+          const fat = Number(item.fat_g ?? item.total_fat_g) || 0;
+          satFat = fat * 0.25; // standard estimate: 25% of fat is saturated
+        }
+
+        // Sodium
+        let sod = Number(item.sodium_mg ?? item.sodium);
+        if (isNaN(sod) || sod === 0) {
+          const cals = Number(item.calories) || 0;
+          sod = Math.round(cals * 0.85); // typical seasoned meal ~0.85mg sodium per cal
+        }
+
+        // Cholesterol
+        let chol = Number(item.cholesterol_mg ?? item.cholesterol);
+        if (isNaN(chol)) {
+          chol = 0;
+        }
+
+        totalSatFat += satFat;
+        totalSodium += sod;
+        totalCholesterol += chol;
+      }
+    } else {
+      // Fallback for custom / quick meals with only top-level macros
+      const fat = Number(meal.total_fat_g ?? meal.fat_g) || 0;
+      const cals = Number(meal.total_calories ?? meal.calories) || 0;
+      const protein = Number(meal.total_protein_g ?? meal.protein_g) || 0;
+
+      totalSatFat += fat * 0.28;
+      totalSodium += Math.round(cals * 0.85);
+      totalCholesterol += protein > 20 ? 35 : 0;
+    }
+  }
+
+  const satFatRounded = Math.round(totalSatFat * 10) / 10;
+  const sodiumRounded = Math.round(totalSodium * 10) / 10;
+  const cholRounded = Math.round(totalCholesterol * 10) / 10;
+
+  return {
+    saturatedFat: satFatRounded,
+    saturatedFatTarget: 20,
+    saturatedFatPercent: Math.min(100, Math.round((satFatRounded / 20) * 100)),
+    sodium: sodiumRounded,
+    sodiumTarget: 2300,
+    sodiumPercent: Math.min(100, Math.round((sodiumRounded / 2300) * 100)),
+    cholesterol: cholRounded,
+    cholesterolTarget: 300,
+    cholesterolPercent: Math.min(100, Math.round((cholRounded / 300) * 100)),
+  };
+}
+

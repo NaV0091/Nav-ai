@@ -108,3 +108,4 @@ export default function GoogleSetupModal({ isOpen, onClose }) {
     </div>
   );
 }
+

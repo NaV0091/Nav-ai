@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Utensils, Flame, Edit2, Heart, Activity } from 'lucide-react';
 import { useNutrition } from '../context/NutritionContext.jsx';
 import { isDateToday } from '../utils/dateUtils.js';
+import { calculateHeartHealthMetrics } from '../services/nutritionEngine.js';
 
 export function CalorieRing({ onEditGoals }) {
-  const { calorieBalance, goals, proteinProgress, carbsProgress, fatProgress, selectedDate } = useNutrition();
+  const { calorieBalance, goals, proteinProgress, carbsProgress, fatProgress, selectedDate, meals } = useNutrition();
   const isToday = isDateToday(selectedDate);
   const [activeSlide, setActiveSlide] = useState(0); // 0: Macros, 1: Heart Health
+  const heartHealth = calculateHeartHealthMetrics(meals || []);
 
   const { consumed, target, remaining, isOverTarget, overAmount } = calorieBalance;
 
@@ -192,28 +194,43 @@ export function CalorieRing({ onEditGoals }) {
             <div>
               <div className="flex justify-between font-bold text-[#5F6F67]">
                 <span>Saturated Fat</span>
-                <span className="text-[#101E19] font-black">5.3 / 20g</span>
+                <span className="text-[#101E19] font-black">
+                  {heartHealth.saturatedFat} / {heartHealth.saturatedFatTarget}g
+                </span>
               </div>
               <div className="w-full bg-[#f1f5f9] rounded-full h-1.5 overflow-hidden mt-0.5">
-                <div className="bg-[#60a5fa] h-full rounded-full" style={{ width: '26%' }} />
+                <div
+                  className="bg-[#60a5fa] h-full rounded-full transition-all duration-300"
+                  style={{ width: `${heartHealth.saturatedFatPercent}%` }}
+                />
               </div>
             </div>
             <div>
               <div className="flex justify-between font-bold text-[#5F6F67]">
                 <span>Sodium</span>
-                <span className="text-[#101E19] font-black">516.3 / 2300mg</span>
+                <span className="text-[#101E19] font-black">
+                  {heartHealth.sodium} / {heartHealth.sodiumTarget}mg
+                </span>
               </div>
               <div className="w-full bg-[#f1f5f9] rounded-full h-1.5 overflow-hidden mt-0.5">
-                <div className="bg-[#34d399] h-full rounded-full" style={{ width: '22%' }} />
+                <div
+                  className="bg-[#34d399] h-full rounded-full transition-all duration-300"
+                  style={{ width: `${heartHealth.sodiumPercent}%` }}
+                />
               </div>
             </div>
             <div>
               <div className="flex justify-between font-bold text-[#5F6F67]">
                 <span>Cholesterol</span>
-                <span className="text-[#101E19] font-black">190.8 / 300mg</span>
+                <span className="text-[#101E19] font-black">
+                  {heartHealth.cholesterol} / {heartHealth.cholesterolTarget}mg
+                </span>
               </div>
               <div className="w-full bg-[#f1f5f9] rounded-full h-1.5 overflow-hidden mt-0.5">
-                <div className="bg-[#fb923c] h-full rounded-full" style={{ width: '63%' }} />
+                <div
+                  className="bg-[#fb923c] h-full rounded-full transition-all duration-300"
+                  style={{ width: `${heartHealth.cholesterolPercent}%` }}
+                />
               </div>
             </div>
           </div>

@@ -26,9 +26,10 @@ export default function AICoachModal({ onClose, currentMeals, dailyGoals, nutrit
   });
 
   const quickPrompts = [
+    'What does this app do?',
+    'Recommend high-protein Indian food',
     'How do I reach my protein goal today?',
-    'What healthy dinner fits my remaining calories?',
-    'Analyze my macro distribution',
+    'What healthy dinner fits my calories?',
   ];
 
   const handleSend = async (userText) => {
@@ -56,16 +57,26 @@ export default function AICoachModal({ onClose, currentMeals, dailyGoals, nutrit
         },
       ]);
     } catch (err) {
-      // Local fallback calculation based on real recorded data
+      const q = textToSend.toLowerCase();
       let fallback = '';
-      if (textToSend.toLowerCase().includes('protein')) {
+      if (['hello', 'hi', 'hey', 'namaste'].some((g) => q === g || q.startsWith(g + ' '))) {
+        fallback = `Hello! 👋 I'm your Nav AI Nutrition Coach. How can I help you today? You can ask me what this app does, check your daily macros, get healthy Indian food ideas, or ask for diet and fitness advice!`;
+      } else if (
+        q.includes('what app this do') ||
+        q.includes('what does this app do') ||
+        q.includes('what is this app') ||
+        q.includes('how to use') ||
+        q.includes('about')
+      ) {
+        fallback = `✨ **Welcome to Nav AI!** Here is what you can do:\n\n• **📸 AI Food Vision**: Snap or upload a photo of any meal (breakfast, lunch, dinner) to detect foods, portion weights, and estimate calories & macros.\n• **📖 Food Diary**: Log meals manually or search our extensive Indian & global food database.\n• **❤️ Heart Health**: Real-time tracking of Saturated Fat (<20g), Sodium (<2300mg), and Cholesterol (<300mg) based on what you eat.\n• **🥗 Smart Recipes**: Scalable healthy recipes with portion controls.\n• **📊 Fitness & Weight**: Track weight trends, water intake, and daily burn goals.\n• **🔒 100% Offline & Cloud Sync**: Works in Guest Mode without login, and syncs across devices when signed in!`;
+      } else if (q.includes('protein')) {
         const gap = Math.max(0, dailyGoals.protein_target_g - nutrition.protein);
-        fallback = `Based on your recorded logs, you have a ${gap}g protein deficit. Try a 150g portion of grilled chicken (46g protein), 150g Greek yogurt (15g protein), or 100g fresh paneer (18g protein).`;
-      } else if (textToSend.toLowerCase().includes('dinner') || textToSend.toLowerCase().includes('remaining')) {
+        fallback = `Based on your recorded logs, you have a ${gap}g protein deficit. Try a 150g portion of grilled chicken (46g protein), 150g Greek yogurt (15g protein), 100g fresh paneer (18g protein), or 2 boiled eggs (12g protein).`;
+      } else if (q.includes('dinner') || q.includes('lunch') || q.includes('meal') || q.includes('eat')) {
         const cals = Math.max(0, dailyGoals.calorie_target - nutrition.calories);
-        fallback = `You have ${cals} Cal remaining. A balanced option would be our Sizzling Lean Beef Fajitas (395 Cal, 38g Protein) or Mediterranean Chickpea Salad (380 Cal). Check out the Recipes tab!`;
+        fallback = `You have ${cals} Cal remaining. Great options include Dal Tadka with 2 Phulkas (340 Cal), Paneer Bhurji with Salad (310 Cal), or Herb Grilled Chicken (280 Cal). Check out the Recipes tab!`;
       } else {
-        fallback = `Your today's summary: ${nutrition.calories} Cal, ${nutrition.protein}g Protein, ${nutrition.carbs}g Carbs, and ${nutrition.fat}g Fat against your ${dailyGoals.calorie_target} Cal target. Consistent logging is key to sustainable progress!`;
+        fallback = `Today's check-in: ${nutrition.calories} Cal consumed, ${nutrition.protein}g Protein, ${nutrition.carbs}g Carbs, and ${nutrition.fat}g Fat against your ${dailyGoals.calorie_target} Cal target. Ask me anything about foods, recipes, or health tips!`;
       }
 
       setConversation((prev) => [...prev, { sender: 'ai', text: fallback }]);

@@ -28,6 +28,7 @@ import {
 import {
   calculateMealTotals,
   calculateRemainingCalories,
+  calculateHeartHealthMetrics,
 } from '../services/nutritionEngine';
 import {
   Sparkles,
@@ -163,6 +164,7 @@ export default function DashboardPage() {
 
   // Totals calculations
   const dailyNutrition = useMemo(() => calculateMealTotals(meals), [meals]);
+  const heartHealth = useMemo(() => calculateHeartHealthMetrics(meals), [meals]);
   const calorieStats = useMemo(
     () => calculateRemainingCalories(goals.calorie_target, dailyNutrition.calories),
     [goals.calorie_target, dailyNutrition.calories]
@@ -711,30 +713,45 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-[#18181B]">Saturated Fat</span>
-                  <span className="text-[#6C7A72]">5.3 / 20g</span>
+                  <span className="text-[#6C7A72]">
+                    {heartHealth.saturatedFat} / {heartHealth.saturatedFatTarget}g
+                  </span>
                 </div>
                 <div className="w-full bg-[#E0F2FE] h-2 rounded-full overflow-hidden">
-                  <div className="bg-[#38BDF8] h-full rounded-full" style={{ width: '26%' }} />
+                  <div
+                    className="bg-[#38BDF8] h-full rounded-full transition-all duration-500"
+                    style={{ width: `${heartHealth.saturatedFatPercent}%` }}
+                  />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-[#18181B]">Sodium</span>
-                  <span className="text-[#6C7A72]">516.3 / 2300mg</span>
+                  <span className="text-[#6C7A72]">
+                    {heartHealth.sodium} / {heartHealth.sodiumTarget}mg
+                  </span>
                 </div>
                 <div className="w-full bg-[#DCFCE7] h-2 rounded-full overflow-hidden">
-                  <div className="bg-[#22C55E] h-full rounded-full" style={{ width: '22%' }} />
+                  <div
+                    className="bg-[#22C55E] h-full rounded-full transition-all duration-500"
+                    style={{ width: `${heartHealth.sodiumPercent}%` }}
+                  />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-[#18181B]">Cholesterol</span>
-                  <span className="text-[#6C7A72]">190.8 / 300mg</span>
+                  <span className="text-[#6C7A72]">
+                    {heartHealth.cholesterol} / {heartHealth.cholesterolTarget}mg
+                  </span>
                 </div>
                 <div className="w-full bg-[#FFEDD5] h-2 rounded-full overflow-hidden">
-                  <div className="bg-[#F97316] h-full rounded-full" style={{ width: '63%' }} />
+                  <div
+                    className="bg-[#F97316] h-full rounded-full transition-all duration-500"
+                    style={{ width: `${heartHealth.cholesterolPercent}%` }}
+                  />
                 </div>
               </div>
             </div>

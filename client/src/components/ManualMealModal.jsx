@@ -32,8 +32,8 @@ export function ManualMealModal({ isOpen, onClose, initialMealType = 'breakfast'
     async function fetchFoods() {
       try {
         const res = await apiClient.searchFoods(searchQuery);
-        if (active && res.foods) {
-          setSearchResults(res.foods);
+        if (active && res) {
+          setSearchResults(Array.isArray(res) ? res : res.foods || []);
         }
       } catch (err) {
         console.error(err);

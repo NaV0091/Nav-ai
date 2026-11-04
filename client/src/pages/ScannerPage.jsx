@@ -110,42 +110,18 @@ export default function ScannerPage() {
       formData.append('notes', notes);
 
       const token = session?.access_token || null;
-      let data;
-      try {
-        data = await analyzeMealImage(formData, token);
-      } catch (err) {
-        // If Gemini API is unconfigured or returns offline fallback, simulate structured recognition
-        data = {
-          meal_name: notes.includes('Sample') ? notes.replace('Sample meal: ', '') : 'Detected Healthy Meal',
-          confidence_score: 0.94,
-          confidence_explanation: 'Identified crisp fresh ingredients with balanced protein and healthy fats.',
-          items: [
-            {
-              food_name: notes.includes('Pancake') ? 'Oatmeal Banana Pancake' : 'Grilled Chicken Breast',
-              portion_grams: 160,
-              calories: 220,
-              protein_g: 28,
-              carbs_g: 12,
-              fat_g: 4.5,
-              confidence: 'high',
-            },
-            {
-              food_name: notes.includes('Pancake') ? 'Fresh Strawberries' : 'Steamed Vegetables',
-              portion_grams: 80,
-              calories: 45,
-              protein_g: 2,
-              carbs_g: 8,
-              fat_g: 0.5,
-              confidence: 'high',
-            },
-          ],
-          total_nutrition: {
-            calories: 265,
-            protein_g: 30,
-            carbs_g: 20,
-            fat_g: 5,
-          },
-        };
+      const data = await analyzeMealImage(formData, token);
+
+      if (data && data.is_food === false) {
+        setAnalysisError(
+          data.rejectionReason || 'No food detected in this image. Please capture a photo of an edible meal, plate, or snack.'
+        );
+        return;
+      }
+
+      if (!data || !data.items || data.items.length === 0) {
+        setAnalysisError('No food items could be recognized in this photo. Please retake with clearer lighting.');
+        return;
       }
 
       // Navigate to results screen with analysis data
@@ -159,7 +135,7 @@ export default function ScannerPage() {
       });
     } catch (err) {
       console.error(err);
-      setAnalysisError(err.message || 'Failed to analyze meal image.');
+      setAnalysisError(err.message || 'Failed to analyze meal image. Please try again with clear lighting.');
     } finally {
       setAnalyzing(false);
     }

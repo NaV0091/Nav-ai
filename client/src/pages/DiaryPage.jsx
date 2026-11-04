@@ -373,10 +373,10 @@ export default function DiaryPage() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div
-            className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-[#D5E7DD] flex flex-col max-h-[85vh] overflow-hidden"
+            className="w-full max-w-lg bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-[#D5E7DD] flex flex-col max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-extrabold text-[#101E19]">
                 Log Food to {addCategory.toUpperCase()}
               </h3>
@@ -389,40 +389,97 @@ export default function DiaryPage() {
             </div>
 
             {/* Food Search Bar */}
-            <div className="relative mb-3">
+            <div className="relative mb-2.5">
               <input
                 type="text"
                 value={foodSearchQuery}
                 onChange={handleSearchFoods}
-                placeholder="Search food (e.g. rice, paneer, dal, chicken)..."
+                placeholder="Search food (e.g. rice, paneer, dal, roti, chicken)..."
+                autoComplete="off"
                 className="w-full pl-10 pr-4 py-2.5 rounded-full bg-[#F8FCF9] border border-[#D5E7DD] text-sm text-[#101E19] focus:outline-none focus:border-[#006C4D]"
               />
               <Search className="w-4 h-4 text-[#6C7A72] absolute left-3.5 top-3.5" />
             </div>
 
+            {/* Selected Food Banner */}
+            {selectedFood && (
+              <div className="p-3 rounded-2xl bg-[#E6F8EE] border border-[#72FBC5] flex items-center justify-between mb-3 animate-in fade-in duration-150">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#006C4D]" />
+                    <span className="text-xs font-bold text-[#101E19]">{selectedFood.name}</span>
+                  </div>
+                  <p className="text-[11px] text-[#006C4D] font-semibold mt-0.5">
+                    For {portionGrams}g: {Math.round(((selectedFood.calories_per_100g || 0) * portionGrams) / 100)} Cal • {Math.round(((selectedFood.protein_per_100g || 0) * portionGrams) / 10) / 10}g P • {Math.round(((selectedFood.carbs_per_100g || 0) * portionGrams) / 10) / 10}g C • {Math.round(((selectedFood.fat_per_100g || 0) * portionGrams) / 10) / 10}g F
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFood(null);
+                    setFoodSearchQuery('');
+                  }}
+                  className="text-xs text-[#BA1A1A] font-bold px-2 py-1 rounded-lg hover:bg-red-50"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+
+            {/* Quick Staples Chips */}
+            {!selectedFood && searchResults.length === 0 && !foodSearchQuery.trim() && (
+              <div className="flex flex-col gap-1.5 mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#6C7A72]">
+                  Quick Pick Indian Staples:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Roti', 'White Rice', 'Dal Tadka', 'Paneer', 'Boiled Egg', 'Poha', 'Khichdi', 'Curd'].map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => handleSearchFoods({ target: { value: item } })}
+                      className="px-2.5 py-1 rounded-full bg-[#F1F6F3] hover:bg-[#E0F2E8] text-xs font-semibold text-[#101E19] border border-[#D5E7DD] transition-colors"
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Search Results Dropdown List */}
-            {searchResults.length > 0 && (
-              <div className="max-h-48 overflow-y-auto mb-4 border border-[#D5E7DD] rounded-2xl p-2 bg-[#F8FCF9] flex flex-col gap-1.5">
+            {!selectedFood && searchResults.length > 0 && (
+              <div className="max-h-52 overflow-y-auto mb-3 border border-[#D5E7DD] rounded-2xl p-2 bg-[#F8FCF9] flex flex-col gap-1.5 shadow-inner">
                 {searchResults.map((f) => (
                   <button
                     key={f.id}
+                    type="button"
                     onClick={() => handleSelectFood(f)}
-                    className="p-2.5 rounded-xl bg-white hover:bg-[#E6F8EE] text-left flex items-center justify-between border border-[#E0F2E8] transition-colors"
+                    className="p-2.5 rounded-xl bg-white hover:bg-[#E6F8EE] text-left flex items-center justify-between border border-[#E0F2E8] transition-colors active:scale-98"
                   >
-                    <div>
+                    <div className="flex-1 pr-2">
                       <p className="text-xs font-bold text-[#101E19]">{f.name}</p>
-                      <p className="text-[11px] text-[#6C7A72]">
+                      <p className="text-[11px] text-[#6C7A72] mt-0.5">
                         {f.calories_per_100g} Cal • {f.protein_per_100g}g P • {f.carbs_per_100g}g C per 100g
                       </p>
                     </div>
-                    <span className="text-xs font-bold text-[#006C4D]">Select</span>
+                    <span className="text-xs font-bold text-[#006C4D] bg-[#E0F2E8] px-2.5 py-1 rounded-full shrink-0">
+                      Select
+                    </span>
                   </button>
                 ))}
               </div>
             )}
 
+            {/* No Search Results Notice */}
+            {!selectedFood && foodSearchQuery.trim() && searchResults.length === 0 && (
+              <div className="p-2.5 rounded-xl bg-[#FFF9F2] border border-[#FDBA8C] text-xs text-[#EA580C] mb-3">
+                No standard food found for "{foodSearchQuery}". Enter custom details below.
+              </div>
+            )}
+
             {/* Portion Grams & Nutrient Preview */}
-            <form onSubmit={handleAddManualMeal} className="flex flex-col gap-4 mt-2">
+            <form onSubmit={handleAddManualMeal} className="flex flex-col gap-3 mt-1">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#6C7A72] mb-1.5">
                   Portion Quantity (Grams)

@@ -20,6 +20,7 @@ import {
   Search,
   X,
   Camera,
+  Edit2,
 } from 'lucide-react';
 
 export default function ScanResultsPage() {
@@ -55,8 +56,8 @@ export default function ScanResultsPage() {
     return (analysis.items || []).map((it, idx) => ({
       id: `scanned-${idx}-${Date.now()}`,
       food_item_id: it.food_item_id || null,
-      name: it.name,
-      quantity: Number(it.quantity) || 100,
+      name: it.name || it.food_name || 'Food Item',
+      quantity: Number(it.quantity || it.portion_grams) || 100,
       unit: it.unit || 'g',
       calories: Number(it.calories) || 0,
       protein_g: Number(it.protein_g ?? it.protein) || 0,
@@ -77,7 +78,34 @@ export default function ScanResultsPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
 
-  // Portion weight adjustment handler
+  // Rename item handler
+  const handleUpdateName = (itemId, newName) => {
+    setItems((prev) =>
+      prev.map((it) => (it.id === itemId ? { ...it, name: newName } : it))
+    );
+  };
+
+  // Direct portion weight input handler
+  const handleSetQuantity = (itemId, newQty) => {
+    const qty = Math.max(1, Number(newQty) || 0);
+    const factor = qty / 100.0;
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === itemId
+          ? {
+              ...it,
+              quantity: qty,
+              calories: Math.round(it.calories_per_100g * factor),
+              protein_g: Math.round(it.protein_per_100g * factor * 10) / 10,
+              carbs_g: Math.round(it.carbs_per_100g * factor * 10) / 10,
+              fat_g: Math.round(it.fat_per_100g * factor * 10) / 10,
+            }
+          : it
+      )
+    );
+  };
+
+  // Portion weight adjustment stepper handler
   const handleUpdateQuantity = (itemId, deltaGrams) => {
     setItems((prev) =>
       prev.map((it) => {
@@ -281,9 +309,19 @@ export default function ScanResultsPage() {
               className="bg-white rounded-2xl p-4 border border-[#D5E7DD] shadow-xs flex flex-col gap-2 transition-all"
             >
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-bold text-[#101E19]">{it.name}</h4>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-[#6C7A72]">
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={it.name}
+                      onChange={(e) => handleUpdateName(it.id, e.target.value)}
+                      placeholder="Food Item Name"
+                      className="text-sm font-bold text-[#101E19] bg-transparent border-b border-transparent hover:border-[#D5E7DD] focus:border-[#006C4D] focus:outline-none py-0.5 w-full transition-colors"
+                      title="Tap to edit food name"
+                    />
+                    <Edit2 className="w-3.5 h-3.5 text-[#6C7A72] shrink-0" />
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-[#6C7A72]">
                     <span className="font-semibold text-[#101E19]">{it.calories} Cal</span>
                     <span>•</span>
                     <span className="text-[#006C4D] font-bold">{it.protein_g}g P</span>
@@ -296,29 +334,38 @@ export default function ScanResultsPage() {
 
                 <button
                   onClick={() => handleDeleteItem(it.id)}
-                  className="w-7 h-7 flex items-center justify-center rounded-full text-[#6C7A72] hover:text-[#BA1A1A] hover:bg-red-50 transition-colors"
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-[#6C7A72] hover:text-[#BA1A1A] hover:bg-red-50 transition-colors shrink-0"
                   title="Remove item"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Grams stepper */}
-              <div className="flex items-center justify-between pt-1 border-t border-[#E0F2E8]/60">
+              {/* Grams stepper & direct input */}
+              <div className="flex items-center justify-between pt-2 border-t border-[#E0F2E8]/60 mt-1">
                 <span className="text-xs text-[#6C7A72] font-medium">Portion Weight</span>
-                <div className="flex items-center bg-[#E0F2E8] rounded-full px-2 py-1 gap-2.5">
+                <div className="flex items-center bg-[#E0F2E8] rounded-full px-2 py-1 gap-1.5">
                   <button
                     onClick={() => handleUpdateQuantity(it.id, -10)}
                     className="w-6 h-6 rounded-full bg-white text-[#101E19] font-bold text-xs flex items-center justify-center shadow-xs active:scale-90 transition-transform"
+                    title="Decrease 10g"
                   >
                     -
                   </button>
-                  <span className="text-xs font-bold text-[#101E19] min-w-[42px] text-center">
-                    {it.quantity}g
-                  </span>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      min="1"
+                      value={it.quantity}
+                      onChange={(e) => handleSetQuantity(it.id, e.target.value)}
+                      className="text-xs font-bold text-[#101E19] w-12 text-center bg-transparent focus:outline-none"
+                    />
+                    <span className="text-xs font-bold text-[#101E19] pr-1">g</span>
+                  </div>
                   <button
                     onClick={() => handleUpdateQuantity(it.id, 10)}
                     className="w-6 h-6 rounded-full bg-white text-[#101E19] font-bold text-xs flex items-center justify-center shadow-xs active:scale-90 transition-transform"
+                    title="Increase 10g"
                   >
                     +
                   </button>

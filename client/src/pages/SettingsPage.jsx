@@ -173,15 +173,20 @@ export default function SettingsPage() {
           <div className="py-3 flex items-center justify-between text-xs sm:text-sm">
             <div className="flex items-center gap-2.5">
               <Server className="w-4 h-4 text-[#225EAA]" />
-              <span className="font-bold text-[#101E19]">Express Backend API</span>
+              <div>
+                <span className="font-bold text-[#101E19] block">Express Backend API</span>
+                <span className="text-[11px] text-[#6C7A72]">
+                  {healthStatus?.backendOnline ? 'Cloud / local REST server' : 'Serverless Client-First mode'}
+                </span>
+              </div>
             </div>
-            {healthStatus?.status === 'ok' ? (
+            {healthStatus?.backendOnline ? (
               <span className="inline-flex items-center gap-1 text-[#006C4D] font-bold text-xs">
                 <CheckCircle2 className="w-4 h-4" /> Online (v{healthStatus?.version || '1.0'})
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[#BA1A1A] font-semibold text-xs">
-                <AlertCircle className="w-4 h-4" /> Offline / Standalone Mode
+              <span className="inline-flex items-center gap-1 text-[#006C4D] font-bold text-xs bg-[#E0F2E8] px-2.5 py-1 rounded-full">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Standalone Mode (Active)
               </span>
             )}
           </div>
@@ -190,11 +195,14 @@ export default function SettingsPage() {
           <div className="py-3 flex items-center justify-between text-xs sm:text-sm">
             <div className="flex items-center gap-2.5">
               <Sparkles className="w-4 h-4 text-[#754F8A]" />
-              <span className="font-bold text-[#101E19]">Google Gemini AI Model</span>
+              <div>
+                <span className="font-bold text-[#101E19] block">Google Gemini AI Model</span>
+                <span className="text-[11px] text-[#6C7A72]">Powers meal scanner, food vision & coaching</span>
+              </div>
             </div>
             {healthStatus?.geminiConfigured ? (
-              <span className="inline-flex items-center gap-1 text-[#006C4D] font-bold text-xs">
-                <CheckCircle2 className="w-4 h-4" /> {healthStatus?.geminiModel || 'gemini-2.5-flash'} Ready
+              <span className="inline-flex items-center gap-1 text-[#006C4D] font-bold text-xs bg-[#E0F2E8] px-2.5 py-1 rounded-full">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {healthStatus?.geminiModel || 'gemini-3.8-flash'} Ready
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-[#EA580C] font-semibold text-xs">

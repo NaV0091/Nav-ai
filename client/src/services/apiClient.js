@@ -54,7 +54,32 @@ async function request(endpoint, options = {}) {
 }
 
 export async function checkServerHealth() {
-  return request('/api/health');
+  const hasClientGemini = Boolean(
+    GEMINI_API_KEY &&
+    !GEMINI_API_KEY.includes('your-') &&
+    GEMINI_API_KEY.length > 10
+  );
+
+  try {
+    const res = await request('/api/health');
+    return {
+      ...res,
+      backendOnline: true,
+      geminiConfigured: Boolean(res.geminiConfigured || hasClientGemini),
+      geminiModel: res.geminiModel || 'gemini-3.8-flash',
+      clientGemini: hasClientGemini,
+    };
+  } catch (err) {
+    return {
+      status: 'standalone',
+      mode: 'client_standalone',
+      backendOnline: false,
+      geminiConfigured: hasClientGemini,
+      geminiModel: 'gemini-3.8-flash',
+      clientGemini: hasClientGemini,
+      error: err.message,
+    };
+  }
 }
 
 /**
@@ -193,7 +218,7 @@ Guidelines:
 3. If asked about nutrition or meal recommendations (especially Indian meals like dal, paneer, roti, sprouts, chicken, rice), give practical, balanced portion ideas.
 4. Incorporate their real data if relevant to their question. Do not provide medical diagnoses.`;
 
-      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+      const candidateModels = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
       for (const model of candidateModels) {
         try {
           const controller = new AbortController();
@@ -339,7 +364,7 @@ RULES:
 
       const promptText = notes ? `${systemPrompt}\n\nAdditional user context: "${notes}"` : systemPrompt;
 
-      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+      const candidateModels = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
       for (const model of candidateModels) {
         try {
           const controller = new AbortController();

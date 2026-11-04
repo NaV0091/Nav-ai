@@ -9,6 +9,14 @@
         window.location.replace('https://nav-ai.web.app' + window.location.pathname + window.location.search + window.location.hash);
       }
     </script>
+    <script>
+      window.__navai_deferred_prompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__navai_deferred_prompt = e;
+        window.dispatchEvent(new CustomEvent('navai:pwa-ready'));
+      });
+    </script>
     <meta name="theme-color" content="#006C4D" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

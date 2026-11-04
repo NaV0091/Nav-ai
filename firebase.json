@@ -17,6 +17,19 @@
               "value": "max-age=0, no-cache, no-store, must-revalidate"
             }
           ]
+        },
+        {
+          "source": "**/*.url",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/x-mswinurl"
+            },
+            {
+              "key": "Content-Disposition",
+              "value": "attachment; filename=\"Nav AI.url\""
+            }
+          ]
         }
       ],
       "rewrites": [

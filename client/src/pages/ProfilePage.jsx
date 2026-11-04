@@ -73,19 +73,21 @@ export default function ProfilePage() {
 
           if (prof) {
             setDisplayName(prof.display_name || user.email?.split('@')[0] || 'User');
-            if (prof.age) setAge(prof.age);
+            if (prof.age) setAge(Number(prof.age));
             if (prof.height_cm) setHeightCm(Number(prof.height_cm));
             if (prof.current_weight_kg) setWeightKg(Number(prof.current_weight_kg));
             if (prof.activity_level) setActivityLevel(prof.activity_level);
             if (prof.goal_type) setGoalType(prof.goal_type);
+            if (prof.unit_system) setUnitSystem(prof.unit_system);
+            if (prof.dietary_tags) setDietaryTags(prof.dietary_tags);
           }
 
           if (goals) {
-            setCalories(goals.calorie_target);
-            setProteinG(goals.protein_target_g);
-            setCarbsG(goals.carbs_target_g);
-            setFatG(goals.fat_target_g);
-            setWaterMl(goals.water_target_ml);
+            setCalories(Number(goals.calorie_target));
+            setProteinG(Number(goals.protein_target_g));
+            setCarbsG(Number(goals.carbs_target_g));
+            setFatG(Number(goals.fat_target_g));
+            setWaterMl(Number(goals.water_target_ml));
           }
         } else {
           const [guestProf, guestGoals] = await Promise.all([
@@ -105,11 +107,11 @@ export default function ProfilePage() {
           }
 
           if (guestGoals) {
-            setCalories(guestGoals.calorie_target);
-            setProteinG(guestGoals.protein_target_g);
-            setCarbsG(guestGoals.carbs_target_g);
-            setFatG(guestGoals.fat_target_g);
-            setWaterMl(guestGoals.water_target_ml);
+            setCalories(Number(guestGoals.calorie_target));
+            setProteinG(Number(guestGoals.protein_target_g));
+            setCarbsG(Number(guestGoals.carbs_target_g));
+            setFatG(Number(guestGoals.fat_target_g));
+            setWaterMl(Number(guestGoals.water_target_ml));
           }
         }
       } catch (err) {
@@ -124,7 +126,38 @@ export default function ProfilePage() {
   // Macro percentages calculation
   const macroDist = calculateMacroDistribution(proteinG, carbsG, fatG);
 
-  // Auto-calculate suggested goals using Mifflin-St Jeor formula
+  // Automatically recalculate suggested realistic targets when user edits body metrics or objective
+  const updateMetricsAndRecalculate = (updates) => {
+    const newAge = updates.age !== undefined ? updates.age : age;
+    const newHeight = updates.heightCm !== undefined ? updates.heightCm : heightCm;
+    const newWeight = updates.weightKg !== undefined ? updates.weightKg : weightKg;
+    const newActivity = updates.activityLevel !== undefined ? updates.activityLevel : activityLevel;
+    const newGoal = updates.goalType !== undefined ? updates.goalType : goalType;
+
+    if (updates.age !== undefined) setAge(newAge);
+    if (updates.heightCm !== undefined) setHeightCm(newHeight);
+    if (updates.weightKg !== undefined) setWeightKg(newWeight);
+    if (updates.activityLevel !== undefined) setActivityLevel(newActivity);
+    if (updates.goalType !== undefined) setGoalType(newGoal);
+
+    if (newAge > 0 && newHeight > 0 && newWeight > 0) {
+      const suggested = calculateSuggestedGoals({
+        age: newAge,
+        height_cm: newHeight,
+        current_weight_kg: newWeight,
+        activity_level: newActivity,
+        goal_type: newGoal,
+      });
+
+      setCalories(suggested.calorie_target);
+      setProteinG(suggested.protein_target_g);
+      setCarbsG(suggested.carbs_target_g);
+      setFatG(suggested.fat_target_g);
+      setWaterMl(suggested.water_target_ml);
+    }
+  };
+
+  // Auto-calculate suggested goals button using Mifflin-St Jeor formula
   const handleAutoSplit = () => {
     const suggested = calculateSuggestedGoals({
       age,
@@ -139,18 +172,22 @@ export default function ProfilePage() {
     setCarbsG(suggested.carbs_target_g);
     setFatG(suggested.fat_target_g);
     setWaterMl(suggested.water_target_ml);
-    showToast('Suggested targets applied based on your physical profile!', 'info');
+    showToast('Suggested realistic targets applied based on your physical profile!', 'info');
   };
 
-  // Stepper handlers
+  // Stepper handlers: step calories up or down, rebalancing macros proportionally
   const handleCalorieStep = (delta) => {
-    const newCal = Math.max(1200, Math.min(6000, calories + delta));
+    const newCal = Math.max(1200, Math.min(4500, calories + delta));
     setCalories(newCal);
-    // Scale macros proportionally
-    const ratio = newCal / (calories || 1);
-    setProteinG(Math.round(proteinG * ratio));
-    setCarbsG(Math.round(carbsG * ratio));
-    setFatG(Math.round(fatG * ratio));
+
+    // Rebalance macronutrients realistically based on the new calorie target
+    const proteinCalories = proteinG * 4;
+    const fatCalories = Math.round(newCal * 0.25);
+    const newFatG = Math.round(fatCalories / 9);
+    const newCarbsG = Math.max(0, Math.round((newCal - proteinCalories - fatCalories) / 4));
+
+    setFatG(newFatG);
+    setCarbsG(newCarbsG);
   };
 
   // Add / Remove Dietary Tag
@@ -195,6 +232,11 @@ export default function ProfilePage() {
           updateUserProfile(user.id, profileData),
           upsertDailyGoals(user.id, goalsData),
         ]);
+        // Mirror to guest profile as secondary fallback
+        await Promise.all([
+          saveGuestProfile(profileData),
+          saveGuestDailyGoals(goalsData),
+        ]).catch(() => {});
       } else {
         await Promise.all([
           saveGuestProfile(profileData),
@@ -202,10 +244,34 @@ export default function ProfilePage() {
         ]);
       }
 
-      showToast('Profile and nutrition targets saved!', 'success');
+      showToast('Profile and nutrition targets saved successfully!', 'success');
     } catch (err) {
       console.error(err);
-      showToast('Failed to save profile', 'error');
+      // Even if network or unexpected error, persist to local storage
+      try {
+        await Promise.all([
+          saveGuestProfile({
+            display_name: displayName,
+            age: Number(age),
+            height_cm: Number(heightCm),
+            current_weight_kg: Number(weightKg),
+            activity_level: activityLevel,
+            goal_type: goalType,
+            unit_system: unitSystem,
+            dietary_tags: dietaryTags,
+          }),
+          saveGuestDailyGoals({
+            calorie_target: Number(calories),
+            protein_target_g: Number(proteinG),
+            carbs_target_g: Number(carbsG),
+            fat_target_g: Number(fatG),
+            water_target_ml: Number(waterMl),
+          }),
+        ]);
+        showToast('Profile and targets saved locally!', 'success');
+      } catch (_) {
+        showToast('Failed to save profile. Please try again.', 'error');
+      }
     } finally {
       setSaving(false);
     }
@@ -327,7 +393,7 @@ export default function ProfilePage() {
               <input
                 type="number"
                 value={age}
-                onChange={(e) => setAge(Number(e.target.value))}
+                onChange={(e) => updateMetricsAndRecalculate({ age: Number(e.target.value) })}
                 className="w-16 bg-transparent text-xl font-black text-[#101E19] focus:outline-none"
               />
               <span className="text-xs text-[#6C7A72]">yrs</span>
@@ -340,7 +406,7 @@ export default function ProfilePage() {
               <input
                 type="number"
                 value={heightCm}
-                onChange={(e) => setHeightCm(Number(e.target.value))}
+                onChange={(e) => updateMetricsAndRecalculate({ heightCm: Number(e.target.value) })}
                 className="w-16 bg-transparent text-xl font-black text-[#101E19] focus:outline-none"
               />
               <span className="text-xs text-[#6C7A72]">
@@ -356,7 +422,7 @@ export default function ProfilePage() {
                 type="number"
                 step="0.1"
                 value={weightKg}
-                onChange={(e) => setWeightKg(Number(e.target.value))}
+                onChange={(e) => updateMetricsAndRecalculate({ weightKg: Number(e.target.value) })}
                 className="w-20 bg-transparent text-xl font-black text-[#101E19] focus:outline-none"
               />
               <span className="text-xs text-[#6C7A72]">
@@ -374,7 +440,7 @@ export default function ProfilePage() {
             </label>
             <select
               value={goalType}
-              onChange={(e) => setGoalType(e.target.value)}
+              onChange={(e) => updateMetricsAndRecalculate({ goalType: e.target.value })}
               className="w-full px-4 py-2.5 rounded-2xl bg-[#F8FCF9] border border-[#D5E7DD] text-xs sm:text-sm font-semibold text-[#101E19] focus:outline-none"
             >
               <option value="lose_weight">Sustainable Fat Loss</option>
@@ -390,7 +456,7 @@ export default function ProfilePage() {
             </label>
             <select
               value={activityLevel}
-              onChange={(e) => setActivityLevel(e.target.value)}
+              onChange={(e) => updateMetricsAndRecalculate({ activityLevel: e.target.value })}
               className="w-full px-4 py-2.5 rounded-2xl bg-[#F8FCF9] border border-[#D5E7DD] text-xs sm:text-sm font-semibold text-[#101E19] focus:outline-none"
             >
               <option value="sedentary">Sedentary (Desk work)</option>

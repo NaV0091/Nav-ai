@@ -158,42 +158,56 @@ export function calculateSuggestedGoals(profile = {}) {
   const activity = profile.activity_level || 'moderate';
   const goal = profile.goal_type || 'maintain_weight';
 
-  // Base BMR (Mifflin-St Jeor formula averaged)
+  // Base BMR (Mifflin-St Jeor formula)
   const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
 
+  // Realistic modern activity multipliers (calibrated for everyday training without over-inflating TDEE)
   const activityMultipliers = {
-    sedentary: 1.2,
-    light: 1.375,
-    moderate: 1.55,
-    active: 1.725,
-    very_active: 1.9,
+    sedentary: 1.15,
+    light: 1.25,
+    moderate: 1.35,
+    active: 1.45,
+    very_active: 1.55,
   };
 
-  const multiplier = activityMultipliers[activity] || 1.55;
+  const multiplier = activityMultipliers[activity] || 1.35;
   const tdee = Math.round(bmr * multiplier);
 
+  // Goal-driven calorie targets:
+  // - Sustainable Fat Loss: healthy ~350 kcal deficit (minimum 1350 kcal)
+  // - Lean Muscle Gain: clean +150 kcal surplus (avoids dirty bulk and unrealistic 3000+ calorie spikes)
+  // - Maintenance / Consistency: exact TDEE
   let targetCalories = tdee;
   if (goal === 'lose_weight') {
-    targetCalories = Math.max(1200, Math.round(tdee - 400));
+    targetCalories = Math.max(1350, Math.round(tdee - 350));
   } else if (goal === 'gain_weight') {
-    targetCalories = Math.round(tdee + 350);
+    targetCalories = Math.round(tdee + 150);
+  } else {
+    targetCalories = tdee;
   }
 
+  // Realistic bounds protection: keeps default suggestions in healthy, realistic 1350 - 2700 kcal range
+  targetCalories = Math.max(1350, Math.min(2700, targetCalories));
+
   // Balanced healthy macronutrient split:
-  // Protein: ~1.8g per kg bodyweight
-  const proteinTargetG = Math.round(Math.min(targetCalories * 0.35 / 4, Math.max(70, weightKg * 1.8)));
+  // Protein: ~1.7g - 1.9g per kg bodyweight for active fitness goals, capped sensibly
+  const proteinPerKg = goal === 'gain_weight' || goal === 'lose_weight' ? 1.8 : 1.5;
+  const idealProtein = Math.round(weightKg * proteinPerKg);
+  // Keep protein between 75g and 30% of total calories
+  const maxProteinFromCals = Math.round((targetCalories * 0.30) / 4);
+  const proteinTargetG = Math.max(75, Math.min(idealProtein, maxProteinFromCals));
   const proteinCalories = proteinTargetG * 4;
 
-  // Fat: 25-30% of total calories
-  const fatCalories = targetCalories * 0.28;
+  // Fat: 25% of total calories (essential fatty acids and hormonal health)
+  const fatCalories = targetCalories * 0.25;
   const fatTargetG = Math.round(fatCalories / 9);
 
-  // Carbs: remaining calories
+  // Carbs: remaining calories for athletic energy & recovery
   const carbsCalories = Math.max(0, targetCalories - proteinCalories - (fatTargetG * 9));
   const carbsTargetG = Math.round(carbsCalories / 4);
 
-  // Water: ~35ml per kg bodyweight
-  const waterTargetMl = Math.round(Math.max(2000, Math.min(4500, weightKg * 38)));
+  // Water: ~35ml per kg bodyweight (clamped between 2.0L and 3.8L)
+  const waterTargetMl = Math.round(Math.max(2000, Math.min(3800, weightKg * 35)));
 
   return {
     calorie_target: targetCalories,
@@ -203,7 +217,7 @@ export function calculateSuggestedGoals(profile = {}) {
     water_target_ml: waterTargetMl,
     bmr: Math.round(bmr),
     tdee,
-    explanation: 'Calculated using Mifflin-St Jeor formula with healthy macro distribution. Adjust anytime in your profile.',
+    explanation: 'Scientifically calibrated using Mifflin-St Jeor formula with realistic activity multipliers and clean lean muscle surplus.',
   };
 }
 

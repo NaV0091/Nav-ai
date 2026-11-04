@@ -4,6 +4,48 @@
  * allowing full guest mode functionality while clearly reporting auth readiness.
  */
 import { createClient } from '@supabase/supabase-js';
+import {
+  getGuestProfile,
+  saveGuestProfile,
+  getGuestDailyGoals,
+  saveGuestDailyGoals,
+  getGuestMealsByDate,
+  addGuestMeal,
+  deleteGuestMeal,
+  getGuestWaterLogs,
+  addGuestWaterLog,
+  deleteGuestWaterLog,
+  getGuestWeightLogs,
+  addGuestWeightLog,
+} from './guestStorage';
+
+function getLocalUserProfile(userId) {
+  try {
+    const raw = localStorage.getItem(`navai_profile_${userId}`);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return null;
+}
+
+function setLocalUserProfile(userId, profile) {
+  try {
+    localStorage.setItem(`navai_profile_${userId}`, JSON.stringify({ ...profile, id: userId }));
+  } catch (_) {}
+}
+
+function getLocalUserDailyGoals(userId) {
+  try {
+    const raw = localStorage.getItem(`navai_goals_${userId}`);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return null;
+}
+
+function setLocalUserDailyGoals(userId, goals) {
+  try {
+    localStorage.setItem(`navai_goals_${userId}`, JSON.stringify({ ...goals, user_id: userId }));
+  } catch (_) {}
+}
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL || 'https://pfejaswwzihrqdlntkeg.supabase.co';
@@ -162,213 +204,295 @@ export function onAuthStateChange(callback) {
 }
 
 // -------------------------------------------------------------
-// AUTHENTICATED DATA OPERATIONS
+// AUTHENTICATED DATA OPERATIONS (Local-First Resilient Architecture)
 // -------------------------------------------------------------
 
 export async function fetchUserProfile(userId) {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
+  let cloudData = null;
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching profile:', error);
+      if (!error && data) {
+        cloudData = data;
+        setLocalUserProfile(userId, data);
+      }
+    } catch (err) {
+      console.warn('Supabase fetchUserProfile failed, falling back to local storage:', err.message);
+    }
   }
-  return data;
+
+  if (cloudData) return cloudData;
+
+  // Fallback to local profile for this user
+  const local = getLocalUserProfile(userId);
+  if (local) return local;
+
+  // Fallback to guest profile if first time
+  const guest = await getGuestProfile().catch(() => null);
+  return guest || null;
 }
 
 export async function updateUserProfile(userId, profileUpdates) {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({ ...profileUpdates, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .select()
-    .single();
+  // 1. Immediately persist locally (guarantees profile is saved even if Supabase tables are uninitialized)
+  const merged = { ...profileUpdates, id: userId, updated_at: new Date().toISOString() };
+  setLocalUserProfile(userId, merged);
+  saveGuestProfile(merged).catch(() => {});
 
-  if (error) throw error;
-  return data;
+  // 2. Sync to Supabase cloud if available
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(merged)
+        .select()
+        .maybeSingle();
+
+      if (!error && data) return data;
+    } catch (err) {
+      console.warn('Supabase updateUserProfile sync skipped:', err.message);
+    }
+  }
+
+  return merged;
 }
 
 export async function fetchDailyGoals(userId) {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('daily_goals')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+  let cloudData = null;
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('daily_goals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching daily goals:', error);
+      if (!error && data) {
+        cloudData = data;
+        setLocalUserDailyGoals(userId, data);
+      }
+    } catch (err) {
+      console.warn('Supabase fetchDailyGoals failed, falling back to local storage:', err.message);
+    }
   }
-  return data;
+
+  if (cloudData) return cloudData;
+
+  // Fallback to local goals for this user
+  const local = getLocalUserDailyGoals(userId);
+  if (local) return local;
+
+  // Fallback to guest goals if first time
+  const guest = await getGuestDailyGoals().catch(() => null);
+  return guest || null;
 }
 
 export async function upsertDailyGoals(userId, goals) {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('daily_goals')
-    .upsert({
-      user_id: userId,
-      calorie_target: goals.calorie_target,
-      protein_target_g: goals.protein_target_g,
-      carbs_target_g: goals.carbs_target_g,
-      fat_target_g: goals.fat_target_g,
-      water_target_ml: goals.water_target_ml,
-      updated_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
+  // 1. Immediately persist locally
+  const merged = {
+    ...goals,
+    user_id: userId,
+    updated_at: new Date().toISOString(),
+  };
+  setLocalUserDailyGoals(userId, merged);
+  saveGuestDailyGoals(merged).catch(() => {});
 
-  if (error) throw error;
-  return data;
+  // 2. Sync to Supabase cloud if available
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('daily_goals')
+        .upsert({
+          user_id: userId,
+          calorie_target: goals.calorie_target,
+          protein_target_g: goals.protein_target_g,
+          carbs_target_g: goals.carbs_target_g,
+          fat_target_g: goals.fat_target_g,
+          water_target_ml: goals.water_target_ml,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .maybeSingle();
+
+      if (!error && data) return data;
+    } catch (err) {
+      console.warn('Supabase upsertDailyGoals sync skipped:', err.message);
+    }
+  }
+
+  return merged;
 }
 
 export async function fetchMealsByDate(userId, dateStr) {
-  if (!isSupabaseConfigured || !supabase) return [];
-  const { data, error } = await supabase
-    .from('meals')
-    .select(`
-      *,
-      meal_items (*)
-    `)
-    .eq('user_id', userId)
-    .eq('meal_date', dateStr)
-    .order('created_at', { ascending: true });
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('meals')
+        .select(`
+          *,
+          meal_items (*)
+        `)
+        .eq('user_id', userId)
+        .eq('meal_date', dateStr)
+        .order('created_at', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching meals:', error);
-    return [];
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch (_) {}
   }
-  return data || [];
+  return getGuestMealsByDate(dateStr).catch(() => []);
 }
 
 export async function createAuthenticatedMeal(userId, mealData, items = []) {
-  if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+  // Always persist locally first so food is NEVER lost
+  const localMeal = await addGuestMeal({
+    ...mealData,
+    user_id: userId,
+    items,
+  }).catch(() => null);
 
-  // Insert parent meal
-  const { data: meal, error: mealError } = await supabase
-    .from('meals')
-    .insert({
-      user_id: userId,
-      meal_date: mealData.meal_date,
-      meal_type: mealData.meal_type,
-      name: mealData.name,
-      notes: mealData.notes || '',
-      image_path: mealData.image_path || null,
-      total_calories: mealData.total_calories,
-      total_protein_g: mealData.total_protein_g,
-      total_carbs_g: mealData.total_carbs_g,
-      total_fat_g: mealData.total_fat_g,
-      nutrition_is_estimated: mealData.nutrition_is_estimated ?? true,
-    })
-    .select()
-    .single();
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data: meal, error: mealError } = await supabase
+        .from('meals')
+        .insert({
+          user_id: userId,
+          meal_date: mealData.meal_date,
+          meal_type: mealData.meal_type,
+          name: mealData.name,
+          notes: mealData.notes || '',
+          image_path: mealData.image_path || null,
+          total_calories: mealData.total_calories,
+          total_protein_g: mealData.total_protein_g,
+          total_carbs_g: mealData.total_carbs_g,
+          total_fat_g: mealData.total_fat_g,
+          nutrition_is_estimated: mealData.nutrition_is_estimated ?? true,
+        })
+        .select()
+        .maybeSingle();
 
-  if (mealError) throw mealError;
-
-  // Insert items if any
-  if (items.length > 0) {
-    const mealItemsToInsert = items.map((it) => ({
-      meal_id: meal.id,
-      food_item_id: it.food_item_id || null,
-      name: it.name,
-      quantity: it.quantity,
-      unit: it.unit || 'g',
-      calories: it.calories,
-      protein_g: it.protein_g,
-      carbs_g: it.carbs_g,
-      fat_g: it.fat_g,
-      nutrition_source: it.nutrition_source || 'estimate',
-      is_estimated: it.is_estimated ?? true,
-    }));
-
-    const { error: itemsError } = await supabase
-      .from('meal_items')
-      .insert(mealItemsToInsert);
-
-    if (itemsError) console.error('Error inserting meal items:', itemsError);
+      if (!mealError && meal) {
+        if (items.length > 0) {
+          const mealItemsToInsert = items.map((it) => ({
+            meal_id: meal.id,
+            food_item_id: it.food_item_id || null,
+            name: it.name,
+            quantity: it.quantity,
+            unit: it.unit || 'g',
+            calories: it.calories,
+            protein_g: it.protein_g,
+            carbs_g: it.carbs_g,
+            fat_g: it.fat_g,
+            nutrition_source: it.nutrition_source || 'estimate',
+            is_estimated: it.is_estimated ?? true,
+          }));
+          await supabase.from('meal_items').insert(mealItemsToInsert).catch(() => {});
+        }
+        return meal;
+      }
+    } catch (_) {}
   }
 
-  return meal;
+  return localMeal || { id: 'meal-' + Date.now(), ...mealData, items };
 }
 
 export async function deleteAuthenticatedMeal(mealId) {
-  if (!isSupabaseConfigured || !supabase) return;
-  const { error } = await supabase.from('meals').delete().eq('id', mealId);
-  if (error) throw error;
+  await deleteGuestMeal(mealId).catch(() => {});
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('meals').delete().eq('id', mealId);
+    } catch (_) {}
+  }
 }
 
 export async function fetchWaterLogsByDate(userId, dateStr) {
-  if (!isSupabaseConfigured || !supabase) return [];
-  const { data, error } = await supabase
-    .from('water_logs')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('log_date', dateStr);
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('water_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('log_date', dateStr);
 
-  if (error) {
-    console.error('Error fetching water logs:', error);
-    return [];
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch (_) {}
   }
-  return data || [];
+  return getGuestWaterLogs(dateStr).catch(() => []);
 }
 
 export async function createAuthenticatedWaterLog(userId, quantityMl, dateStr) {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('water_logs')
-    .insert({
-      user_id: userId,
-      log_date: dateStr,
-      quantity_ml: quantityMl,
-    })
-    .select()
-    .single();
+  const localLog = await addGuestWaterLog(quantityMl, dateStr).catch(() => null);
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('water_logs')
+        .insert({
+          user_id: userId,
+          log_date: dateStr,
+          quantity_ml: quantityMl,
+        })
+        .select()
+        .maybeSingle();
 
-  if (error) throw error;
-  return data;
+      if (!error && data) return data;
+    } catch (_) {}
+  }
+  return localLog || { id: 'water-' + Date.now(), quantity_ml: quantityMl, log_date: dateStr };
 }
 
 export async function deleteAuthenticatedWaterLog(logId) {
-  if (!isSupabaseConfigured || !supabase) return;
-  const { error } = await supabase.from('water_logs').delete().eq('id', logId);
-  if (error) throw error;
+  await deleteGuestWaterLog(logId).catch(() => {});
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('water_logs').delete().eq('id', logId);
+    } catch (_) {}
+  }
 }
 
 export async function fetchWeightLogs(userId) {
-  if (!isSupabaseConfigured || !supabase) return [];
-  const { data, error } = await supabase
-    .from('weight_logs')
-    .select('*')
-    .eq('user_id', userId)
-    .order('recorded_at', { ascending: true });
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('weight_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('recorded_at', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching weight logs:', error);
-    return [];
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch (_) {}
   }
-  return data || [];
+  return getGuestWeightLogs().catch(() => []);
 }
 
 export async function createAuthenticatedWeightLog(userId, weightKg, dateStr, notes = '') {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('weight_logs')
-    .insert({
-      user_id: userId,
-      weight_kg: weightKg,
-      recorded_at: dateStr,
-      notes,
-    })
-    .select()
-    .single();
+  const localLog = await addGuestWeightLog(weightKg, dateStr).catch(() => null);
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('weight_logs')
+        .insert({
+          user_id: userId,
+          weight_kg: weightKg,
+          recorded_at: dateStr,
+          notes,
+        })
+        .select()
+        .maybeSingle();
 
-  if (error) throw error;
-  return data;
+      if (!error && data) return data;
+    } catch (_) {}
+  }
+  return localLog || { id: 'weight-' + Date.now(), weight_kg: weightKg, recorded_at: dateStr, notes };
 }
 

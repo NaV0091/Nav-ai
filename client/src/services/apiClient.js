@@ -177,7 +177,7 @@ export async function getAICoachInsight(userContext, token = null) {
   // 2. Direct Gemini Call via REST API
   if (GEMINI_API_KEY) {
     try {
-      const prompt = `You are Nav AI Nutrition Coach & Assistant, a warm, knowledgeable, evidence-based dietitian and in-app assistant.
+      const prompt = `You are Nav AI Nutrition Coach & Assistant, a warm, knowledgeable, evidence-based dietitian and in-app assistant for the Nav AI nutrition app.
 User asks: "${question}"
 
 User's Real Progress for Today:
@@ -193,9 +193,11 @@ Guidelines:
 3. If asked about nutrition or meal recommendations (especially Indian meals like dal, paneer, roti, sprouts, chicken, rice), give practical, balanced portion ideas.
 4. Incorporate their real data if relevant to their question. Do not provide medical diagnoses.`;
 
-      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
+      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
       for (const model of candidateModels) {
         try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 7000);
           const apiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
             {
@@ -205,8 +207,10 @@ Guidelines:
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: { temperature: 0.5 },
               }),
+              signal: controller.signal,
             }
           );
+          clearTimeout(timeout);
 
           if (apiRes.ok) {
             const data = await apiRes.json();
@@ -220,10 +224,36 @@ Guidelines:
     } catch (_) {}
   }
 
-  // 3. Smart local fallback
+  // 3. Smart local conversational fallback
   const remainingCals = Math.max(0, (goals.calorie_target || 2000) - (nutrition.calories || 0));
+  if (cleanQ.includes('protein')) {
+    const gap = Math.max(0, (goals.protein_target_g || 120) - (nutrition.protein || 0));
+    return {
+      insight: `To reach your protein goal, you have a ${Math.round(gap)}g deficit today. Great choices include 150g grilled chicken (46g P), 150g Greek yogurt (15g P), 100g fresh paneer (18g P), 2 boiled eggs (13g P), or 1 cup sprouted moong (14g P).`,
+      source: 'conversational_engine',
+    };
+  }
+  if (cleanQ.includes('weight loss') || cleanQ.includes('fat loss') || cleanQ.includes('lose weight')) {
+    return {
+      insight: `For sustainable fat loss, maintain a gentle 300–500 calorie deficit while keeping protein high (~1.6g–2g per kg body weight). Focus on high-volume foods like salads, dal, vegetable stir-fries, and drink at least 2.5–3L of water daily!`,
+      source: 'conversational_engine',
+    };
+  }
+  if (cleanQ.includes('heart') || cleanQ.includes('cholesterol') || cleanQ.includes('sodium')) {
+    return {
+      insight: `Nav AI tracks your Heart Health in real-time! Keep **Saturated Fat** under 20g, **Sodium** under 2300mg, and **Cholesterol** under 300mg daily. Swap deep-fried items for tandoori, air-fried, or steamed dishes with plenty of fiber.`,
+      source: 'conversational_engine',
+    };
+  }
+  if (cleanQ.includes('scanner') || cleanQ.includes('camera') || cleanQ.includes('scan')) {
+    return {
+      insight: `To scan a meal, tap the **Scanner** tab at the bottom, snap a photo or choose from gallery, and Nav AI will identify the food, portion weight, and compute calories, protein, carbs, and fat!`,
+      source: 'conversational_engine',
+    };
+  }
+
   return {
-    insight: `Today's check-in: ${nutrition.calories || 0} Cal consumed (${remainingCals} Cal left). Protein is at ${nutrition.protein || 0}g / ${goals.protein_target_g || 120}g. Stay hydrated and balanced!`,
+    insight: `Today's check-in: **${nutrition.calories || 0} Cal** consumed (${remainingCals} Cal left). Protein is at **${nutrition.protein || 0}g / ${goals.protein_target_g || 120}g**. Ask me anything about foods, recipes, macros, or workouts!`,
     source: 'algorithmic_fallback',
   };
 }
@@ -309,9 +339,11 @@ RULES:
 
       const promptText = notes ? `${systemPrompt}\n\nAdditional user context: "${notes}"` : systemPrompt;
 
-      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
+      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
       for (const model of candidateModels) {
         try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 12000);
           const apiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
             {
@@ -337,8 +369,10 @@ RULES:
                   temperature: 0.2,
                 },
               }),
+              signal: controller.signal,
             }
           );
+          clearTimeout(timeout);
 
           if (apiRes.ok) {
             const data = await apiRes.json();

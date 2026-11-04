@@ -329,7 +329,7 @@ export default function ScannerPage() {
           {analyzing ? (
             <>
               <Sparkles className="w-4 h-4 text-[#34D399] animate-spin" />
-              <span>Analyzing Meal with Gemini...</span>
+              <span>Analyzing Meal with Nav AI...</span>
             </>
           ) : (
             <>

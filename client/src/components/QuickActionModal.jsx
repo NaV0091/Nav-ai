@@ -36,7 +36,7 @@ export function QuickActionModal({ isOpen, onClose, onOpenManualEntry }) {
                 Scan Meal with AI
               </span>
               <span className="text-xs text-forest-muted">
-                Analyze photo with Gemini vision
+                Analyze photo with Nav AI vision
               </span>
             </div>
           </button>

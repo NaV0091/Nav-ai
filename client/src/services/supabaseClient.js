@@ -34,29 +34,6 @@ export async function signUpWithEmail(email, password, displayName) {
     throw new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
   }
 
-  // Attempt instant registration via backend admin endpoint if reachable
-  const backendBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
-  try {
-    const res = await fetch(`${backendBase}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, displayName }),
-    });
-
-    if (res.ok) {
-      // User registered and pre-confirmed on backend; sign in directly to get session
-      const loginData = await supabase.auth.signInWithPassword({ email, password });
-      if (!loginData.error && loginData.data?.session) {
-        return loginData.data;
-      }
-    } else if (res.status === 409) {
-      throw new Error('This email is already registered. Please sign in instead.');
-    }
-  } catch (apiErr) {
-    if (apiErr.message?.includes('already registered')) throw apiErr;
-    // Otherwise fallback to client-side Supabase signUp
-  }
-
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -70,7 +47,7 @@ export async function signUpWithEmail(email, password, displayName) {
   if (error) {
     if (error.status === 429 || error.message?.toLowerCase().includes('rate limit')) {
       throw new Error(
-        'Supabase email confirmation rate limit reached (3 per hour on free tier). You can turn off "Confirm email" in Supabase Auth Settings for instant signups, or continue with Guest Mode!'
+        'Supabase email confirmation rate limit reached (3 per hour on free tier). You can continue with Guest Mode!'
       );
     }
     throw error;
@@ -83,37 +60,22 @@ export async function signInWithEmail(email, password) {
     throw new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
   }
 
-  let { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (error && error.message?.toLowerCase().includes('email not confirmed')) {
-    // Attempt auto-confirmation via backend admin endpoint if available
-    const backendBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
-    try {
-      const confirmRes = await fetch(`${backendBase}/api/auth/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      if (confirmRes.ok) {
-        // Retry sign in after confirmation
-        const retryResult = await supabase.auth.signInWithPassword({ email, password });
-        if (!retryResult.error) {
-          return retryResult.data;
-        }
-      }
-    } catch (_) {
-      // Backend not running, show friendly email confirmation notice
+  if (error) {
+    if (error.message?.toLowerCase().includes('email not confirmed')) {
+      throw new Error(
+        'Your email address has not been confirmed yet. Please check your inbox for the confirmation email or check spam.'
+      );
     }
-
-    throw new Error(
-      'Your email address has not been confirmed yet. Please check your inbox for the confirmation email or check spam.'
-    );
+    if (error.message?.toLowerCase().includes('invalid login credentials')) {
+      throw new Error('Incorrect email or password. Please check your credentials or register a new account.');
+    }
+    throw error;
   }
-
-  if (error) throw error;
   return data;
 }
 
@@ -131,38 +93,46 @@ export async function signInWithGoogle() {
     throw new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
   }
 
+  // Proactively check if Google OAuth provider is enabled in Supabase settings
+  try {
+    const settingsRes = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: supabaseAnonKey },
+    });
+    if (settingsRes.ok) {
+      const settings = await settingsRes.json();
+      if (settings?.external?.google === false) {
+        const disabledErr = new Error(
+          'Google Sign-In is not enabled yet in your Supabase project (pfejaswwzihrqdlntkeg). Please enable Google in Supabase Authentication settings.'
+        );
+        disabledErr.isGoogleDisabled = true;
+        disabledErr.code = 'GOOGLE_PROVIDER_DISABLED';
+        throw disabledErr;
+      }
+    }
+  } catch (checkErr) {
+    if (checkErr.isGoogleDisabled) throw checkErr;
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
-      skipBrowserRedirect: true,
     },
   });
 
-  if (error) throw error;
-
-  if (data?.url) {
-    try {
-      // Verify if the Google provider is enabled on Supabase server before redirecting
-      const checkRes = await fetch(data.url, { method: 'GET' });
-      if (checkRes.status === 400) {
-        const body = await checkRes.json().catch(() => ({}));
-        if (body.error_code === 'validation_failed' || body.msg?.toLowerCase().includes('not enabled')) {
-          const disabledErr = new Error(
-            'Google Sign-In is not enabled in your Supabase project (pfejaswwzihrqdlntkeg). Please enable Google in Supabase Authentication settings.'
-          );
-          disabledErr.isGoogleDisabled = true;
-          disabledErr.code = 'GOOGLE_PROVIDER_DISABLED';
-          throw disabledErr;
-        }
-      }
-    } catch (checkErr) {
-      if (checkErr.isGoogleDisabled) throw checkErr;
-      // Network check failed due to something else (e.g. strict CORS), proceed to redirect
+  if (error) {
+    if (
+      error.message?.toLowerCase().includes('not enabled') ||
+      error.message?.toLowerCase().includes('validation_failed')
+    ) {
+      const disabledErr = new Error(
+        'Google Sign-In is not enabled yet in your Supabase project (pfejaswwzihrqdlntkeg). Please enable Google in Supabase Authentication settings.'
+      );
+      disabledErr.isGoogleDisabled = true;
+      disabledErr.code = 'GOOGLE_PROVIDER_DISABLED';
+      throw disabledErr;
     }
-
-    window.location.href = data.url;
-    return data;
+    throw error;
   }
 
   return data;

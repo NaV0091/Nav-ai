@@ -77,7 +77,7 @@ export default function WelcomePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-[#6C7A72] leading-relaxed max-w-xl mx-auto lg:mx-0">
-            Snap a photo of your breakfast, lunch, or dinner. Gemini AI identifies ingredients, estimates portions, and maps nutrients in seconds.
+            Snap a photo of your breakfast, lunch, or dinner. Nav AI identifies ingredients, estimates portions, and maps nutrients in seconds.
           </p>
 
           {/* Primary Action Buttons */}

@@ -14,6 +14,7 @@ import {
   deleteAuthenticatedMeal,
 } from '../services/supabaseClient';
 import { searchFoods } from '../services/apiClient';
+import { searchFoodsLocal } from '../data/foodsDatabase';
 import {
   calculateMealTotals,
   calculateItemNutrition,
@@ -87,24 +88,27 @@ export default function DiaryPage() {
     setCurrentDate(getTodayDateString(d));
   };
 
-  // Search food items
-  const handleSearchFoods = async (e) => {
-    const q = e.target.value;
+  // Search food items with instant 0ms local response + optional background fetch
+  const handleSearchFoods = (e) => {
+    const q = e?.target?.value ?? (typeof e === 'string' ? e : '');
     setFoodSearchQuery(q);
-    if (!q.trim()) {
+    if (!q || !q.trim()) {
       setSearchResults([]);
       return;
     }
 
-    try {
-      setSearching(true);
-      const list = await searchFoods(q);
-      setSearchResults(list);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSearching(false);
-    }
+    // 1. Instant synchronous local search (works offline & immediately on phone & PC)
+    const localMatches = searchFoodsLocal(q);
+    setSearchResults(localMatches);
+
+    // 2. Background check if API is available to enrich results
+    searchFoods(q)
+      .then((enriched) => {
+        if (Array.isArray(enriched) && enriched.length > 0) {
+          setSearchResults(enriched);
+        }
+      })
+      .catch(() => {});
   };
 
   // Select food from search
@@ -391,14 +395,28 @@ export default function DiaryPage() {
             {/* Food Search Bar */}
             <div className="relative mb-2.5">
               <input
-                type="text"
+                type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
                 value={foodSearchQuery}
                 onChange={handleSearchFoods}
                 placeholder="Search food (e.g. rice, paneer, dal, roti, chicken)..."
                 autoComplete="off"
-                className="w-full pl-10 pr-4 py-2.5 rounded-full bg-[#F8FCF9] border border-[#D5E7DD] text-sm text-[#101E19] focus:outline-none focus:border-[#006C4D]"
+                className="w-full pl-10 pr-9 py-2.5 rounded-full bg-[#F8FCF9] border border-[#D5E7DD] text-sm text-[#101E19] focus:outline-none focus:border-[#006C4D]"
               />
               <Search className="w-4 h-4 text-[#6C7A72] absolute left-3.5 top-3.5" />
+              {foodSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFoodSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  className="absolute right-3 top-2.5 w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-300"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
 
             {/* Selected Food Banner */}

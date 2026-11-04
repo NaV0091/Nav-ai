@@ -50,7 +50,13 @@ export async function analyzeMealImage(imageBuffer, mimeType, mealCategory = 'lu
 
   const ai = getGenAI();
   const candidateModels = Array.from(
-    new Set([config.geminiModel, 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'].filter(Boolean))
+    new Set([
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite',
+      config.geminiModel,
+    ].filter(Boolean))
   );
 
   const systemPrompt = `You are a clinical dietitian and precision computer vision food recognition engine for the Nav AI nutrition app.
@@ -301,7 +307,13 @@ export async function getNutritionCoachAdvice(userContext) {
 
   const ai = getGenAI();
   const candidateModels = Array.from(
-    new Set([config.geminiModel, 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'].filter(Boolean))
+    new Set([
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite',
+      config.geminiModel,
+    ].filter(Boolean))
   );
 
   const prompt = `You are Nav AI Nutrition Coach & Assistant, a warm, knowledgeable, evidence-based dietitian and in-app assistant.

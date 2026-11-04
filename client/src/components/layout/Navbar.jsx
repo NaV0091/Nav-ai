@@ -136,13 +136,6 @@ export default function Navbar() {
                     <CalendarCheck className="w-4 h-4 text-[#006C4D]" />
                     My Diet Plans
                   </Link>
-                  <Link
-                    to="/settings"
-                    className="flex items-center gap-2.5 px-3 py-2 text-xs text-[#101E19] hover:bg-[#E0F2E8] rounded-xl transition-colors font-semibold"
-                  >
-                    <Sparkles className="w-4 h-4 text-[#006C4D]" />
-                    Settings & Diagnostics
-                  </Link>
 
                   <div className="pt-1 border-t border-[#E0F2E8] mt-1">
                     {user ? (

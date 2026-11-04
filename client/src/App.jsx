@@ -22,7 +22,6 @@ import RecipesPage from './pages/RecipesPage';
 import RecipeDetailPage from './pages/RecipeDetailPage';
 import ProgressPage from './pages/ProgressPage';
 import ProfilePage from './pages/ProfilePage';
-import SettingsPage from './pages/SettingsPage';
 
 function RootRoute() {
   const { user, isGuest, loading } = useAuth();
@@ -62,7 +61,7 @@ export default function App() {
               <Route path="/recipes/:id" element={<RecipeDetailPage />} />
               <Route path="/progress" element={<ProgressPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings" element={<Navigate to="/profile" replace />} />
             </Route>
 
             {/* Fallback */}

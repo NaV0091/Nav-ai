@@ -7,12 +7,17 @@ import {
   saveGuestProfile,
   getGuestDailyGoals,
   saveGuestDailyGoals,
+  getGuestWeightLogs,
+  addGuestWeightLog,
+  getTodayDateString,
 } from '../services/guestStorage';
 import {
   fetchUserProfile,
   updateUserProfile,
   fetchDailyGoals,
   upsertDailyGoals,
+  fetchWeightLogs,
+  createAuthenticatedWeightLog,
 } from '../services/supabaseClient';
 import {
   calculateSuggestedGoals,
@@ -66,21 +71,31 @@ export default function ProfilePage() {
       try {
         setLoading(true);
         if (user && isSupabaseConfigured) {
-          const [prof, goals] = await Promise.all([
+          const [prof, goals, weightList] = await Promise.all([
             fetchUserProfile(user.id),
             fetchDailyGoals(user.id),
+            fetchWeightLogs(user.id).catch(() => []),
           ]);
 
           if (prof) {
             setDisplayName(prof.display_name || user.email?.split('@')[0] || 'User');
             if (prof.age) setAge(Number(prof.age));
             if (prof.height_cm) setHeightCm(Number(prof.height_cm));
-            if (prof.current_weight_kg) setWeightKg(Number(prof.current_weight_kg));
             if (prof.activity_level) setActivityLevel(prof.activity_level);
             if (prof.goal_type) setGoalType(prof.goal_type);
             if (prof.unit_system) setUnitSystem(prof.unit_system);
             if (prof.dietary_tags) setDietaryTags(prof.dietary_tags);
           }
+
+          // Resolve latest weight: prefer most recent logged weight if available, or profile's current_weight_kg
+          let resolvedWeight = prof?.current_weight_kg ? Number(prof.current_weight_kg) : 64.5;
+          if (weightList && weightList.length > 0) {
+            const latestLog = weightList[weightList.length - 1];
+            if (latestLog && latestLog.weight_kg) {
+              resolvedWeight = Number(latestLog.weight_kg);
+            }
+          }
+          setWeightKg(resolvedWeight);
 
           if (goals) {
             setCalories(Number(goals.calorie_target));
@@ -90,21 +105,30 @@ export default function ProfilePage() {
             setWaterMl(Number(goals.water_target_ml));
           }
         } else {
-          const [guestProf, guestGoals] = await Promise.all([
+          const [guestProf, guestGoals, guestWeights] = await Promise.all([
             getGuestProfile(),
             getGuestDailyGoals(),
+            getGuestWeightLogs().catch(() => []),
           ]);
 
           if (guestProf) {
             setDisplayName(guestProf.display_name || 'Guest Explorer');
             setAge(guestProf.age || 28);
             setHeightCm(guestProf.height_cm || 170);
-            setWeightKg(guestProf.current_weight_kg || 64.5);
             setActivityLevel(guestProf.activity_level || 'moderate');
             setGoalType(guestProf.goal_type || 'maintain_weight');
             setUnitSystem(guestProf.unit_system || 'metric');
             if (guestProf.dietary_tags) setDietaryTags(guestProf.dietary_tags);
           }
+
+          let resolvedWeight = guestProf?.current_weight_kg ? Number(guestProf.current_weight_kg) : 64.5;
+          if (guestWeights && guestWeights.length > 0) {
+            const latestLog = guestWeights[guestWeights.length - 1];
+            if (latestLog && latestLog.weight_kg) {
+              resolvedWeight = Number(latestLog.weight_kg);
+            }
+          }
+          setWeightKg(resolvedWeight);
 
           if (guestGoals) {
             setCalories(Number(guestGoals.calorie_target));
@@ -208,11 +232,12 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const numericWeight = Number(weightKg);
       const profileData = {
         display_name: displayName,
         age: Number(age),
         height_cm: Number(heightCm),
-        current_weight_kg: Number(weightKg),
+        current_weight_kg: numericWeight,
         activity_level: activityLevel,
         goal_type: goalType,
         unit_system: unitSystem,
@@ -227,34 +252,41 @@ export default function ProfilePage() {
         water_target_ml: Number(waterMl),
       };
 
+      const todayStr = getTodayDateString();
+
       if (user && isSupabaseConfigured) {
         await Promise.all([
           updateUserProfile(user.id, profileData),
           upsertDailyGoals(user.id, goalsData),
+          createAuthenticatedWeightLog(user.id, numericWeight, todayStr, 'Updated from profile'),
         ]);
         // Mirror to guest profile as secondary fallback
         await Promise.all([
           saveGuestProfile(profileData),
           saveGuestDailyGoals(goalsData),
+          addGuestWeightLog(numericWeight, todayStr, 'Updated from profile'),
         ]).catch(() => {});
       } else {
         await Promise.all([
           saveGuestProfile(profileData),
           saveGuestDailyGoals(goalsData),
+          addGuestWeightLog(numericWeight, todayStr, 'Updated from profile'),
         ]);
       }
 
-      showToast('Profile and nutrition targets saved successfully!', 'success');
+      showToast('Profile and weight updated across app!', 'success');
     } catch (err) {
       console.error(err);
       // Even if network or unexpected error, persist to local storage
       try {
+        const fallbackWeight = Number(weightKg);
+        const todayStr = getTodayDateString();
         await Promise.all([
           saveGuestProfile({
             display_name: displayName,
             age: Number(age),
             height_cm: Number(heightCm),
-            current_weight_kg: Number(weightKg),
+            current_weight_kg: fallbackWeight,
             activity_level: activityLevel,
             goal_type: goalType,
             unit_system: unitSystem,
@@ -267,8 +299,9 @@ export default function ProfilePage() {
             fat_target_g: Number(fatG),
             water_target_ml: Number(waterMl),
           }),
+          addGuestWeightLog(fallbackWeight, todayStr, 'Updated from profile'),
         ]);
-        showToast('Profile and targets saved locally!', 'success');
+        showToast('Profile and weight saved locally!', 'success');
       } catch (_) {
         showToast('Failed to save profile. Please try again.', 'error');
       }

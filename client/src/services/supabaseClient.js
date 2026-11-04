@@ -17,6 +17,8 @@ import {
   deleteGuestWaterLog,
   getGuestWeightLogs,
   addGuestWeightLog,
+  deleteGuestWeightLog,
+  getTodayDateString,
 } from './guestStorage';
 
 function getLocalUserProfile(userId) {
@@ -243,7 +245,44 @@ export async function updateUserProfile(userId, profileUpdates) {
   setLocalUserProfile(userId, merged);
   saveGuestProfile(merged).catch(() => {});
 
-  // 2. Sync to Supabase cloud if available
+  // 2. If current_weight_kg is present, automatically ensure weight log for today is created or updated
+  if (profileUpdates.current_weight_kg !== undefined && profileUpdates.current_weight_kg !== null) {
+    const val = Number(profileUpdates.current_weight_kg);
+    if (!isNaN(val) && val > 0) {
+      addGuestWeightLog(val, getTodayDateString(), 'Updated from profile').catch(() => {});
+      if (isSupabaseConfigured && supabase && userId) {
+        (async () => {
+          try {
+            const todayStr = getTodayDateString();
+            const { data: existing } = await supabase
+              .from('weight_logs')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('recorded_at', todayStr)
+              .maybeSingle();
+
+            if (existing) {
+              await supabase
+                .from('weight_logs')
+                .update({ weight_kg: val, notes: 'Updated from profile' })
+                .eq('id', existing.id);
+            } else {
+              await supabase
+                .from('weight_logs')
+                .insert({
+                  user_id: userId,
+                  weight_kg: val,
+                  recorded_at: todayStr,
+                  notes: 'Updated from profile',
+                });
+            }
+          } catch (_) {}
+        })();
+      }
+    }
+  }
+
+  // 3. Sync to Supabase cloud if available
   if (isSupabaseConfigured && supabase && userId) {
     try {
       const { data, error } = await supabase
@@ -476,23 +515,91 @@ export async function fetchWeightLogs(userId) {
 }
 
 export async function createAuthenticatedWeightLog(userId, weightKg, dateStr, notes = '') {
-  const localLog = await addGuestWeightLog(weightKg, dateStr).catch(() => null);
+  const val = Number(weightKg);
+  const localLog = await addGuestWeightLog(val, dateStr, notes).catch(() => null);
+
+  // Synchronize profile current_weight_kg in local storage and Supabase
+  try {
+    const localProf = getLocalUserProfile(userId);
+    if (localProf) {
+      setLocalUserProfile(userId, { ...localProf, current_weight_kg: val });
+    }
+  } catch (_) {}
+
   if (isSupabaseConfigured && supabase && userId) {
     try {
-      const { data, error } = await supabase
+      await supabase
+        .from('profiles')
+        .update({ current_weight_kg: val })
+        .eq('id', userId);
+    } catch (_) {}
+
+    try {
+      const { data: existing } = await supabase
         .from('weight_logs')
-        .insert({
-          user_id: userId,
-          weight_kg: weightKg,
-          recorded_at: dateStr,
-          notes,
-        })
-        .select()
+        .select('id')
+        .eq('user_id', userId)
+        .eq('recorded_at', dateStr)
         .maybeSingle();
 
-      if (!error && data) return data;
+      if (existing) {
+        const { data, error } = await supabase
+          .from('weight_logs')
+          .update({
+            weight_kg: val,
+            notes: notes || '',
+          })
+          .eq('id', existing.id)
+          .select()
+          .maybeSingle();
+
+        if (!error && data) return data;
+      } else {
+        const { data, error } = await supabase
+          .from('weight_logs')
+          .insert({
+            user_id: userId,
+            weight_kg: val,
+            recorded_at: dateStr,
+            notes,
+          })
+          .select()
+          .maybeSingle();
+
+        if (!error && data) return data;
+      }
     } catch (_) {}
   }
-  return localLog || { id: 'weight-' + Date.now(), weight_kg: weightKg, recorded_at: dateStr, notes };
+  return localLog || { id: 'weight-' + Date.now(), weight_kg: val, recorded_at: dateStr, notes };
+}
+
+export async function deleteAuthenticatedWeightLog(userId, id) {
+  await deleteGuestWeightLog(id).catch(() => {});
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      await supabase
+        .from('weight_logs')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+    } catch (_) {}
+  }
+
+  // After deletion, find latest remaining log and sync back to profile
+  try {
+    const remaining = await fetchWeightLogs(userId);
+    if (remaining && remaining.length > 0) {
+      const latest = Number(remaining[remaining.length - 1].weight_kg);
+      if (!isNaN(latest) && latest > 0) {
+        const localProf = getLocalUserProfile(userId);
+        if (localProf) {
+          setLocalUserProfile(userId, { ...localProf, current_weight_kg: latest });
+        }
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('profiles').update({ current_weight_kg: latest }).eq('id', userId).catch(() => {});
+        }
+      }
+    }
+  } catch (_) {}
 }
 

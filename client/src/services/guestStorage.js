@@ -104,16 +104,26 @@ export async function getGuestProfile() {
 
 export async function saveGuestProfile(profileData) {
   const db = await getDB();
+  const updated = {
+    ...profileData,
+    id: 'current_guest',
+    updated_at: new Date().toISOString(),
+  };
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('profile', 'readwrite');
     const store = tx.objectStore('profile');
-    const updated = {
-      ...profileData,
-      id: 'current_guest',
-      updated_at: new Date().toISOString(),
-    };
     const req = store.put(updated);
-    req.onsuccess = () => resolve(updated);
+    req.onsuccess = () => {
+      // If current_weight_kg is provided, automatically synchronize today's weight log in progress
+      if (profileData.current_weight_kg !== undefined && profileData.current_weight_kg !== null) {
+        const val = Number(profileData.current_weight_kg);
+        if (!isNaN(val) && val > 0) {
+          syncGuestWeightLogInternal(val, getTodayDateString(), 'Updated from profile').catch(() => {});
+        }
+      }
+      resolve(updated);
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -337,21 +347,95 @@ export async function getGuestWeightLogs() {
   });
 }
 
+async function syncGuestWeightLogInternal(val, dateStr = getTodayDateString(), notes = '') {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction('weight_logs', 'readwrite');
+      const store = tx.objectStore('weight_logs');
+      const getReq = store.getAll();
+      getReq.onsuccess = () => {
+        const all = getReq.result || [];
+        const existing = all.find((l) => (l.recorded_at || '').startsWith(dateStr));
+        if (existing) {
+          const updated = {
+            ...existing,
+            weight_kg: val,
+            notes: notes || existing.notes || '',
+            updated_at: new Date().toISOString(),
+          };
+          store.put(updated);
+          resolve(updated);
+        } else {
+          const newLog = {
+            id: generateId(),
+            weight_kg: val,
+            recorded_at: dateStr,
+            notes: notes || '',
+            created_at: new Date().toISOString(),
+          };
+          store.add(newLog);
+          resolve(newLog);
+        }
+      };
+      getReq.onerror = () => resolve(null);
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
 export async function addGuestWeightLog(weight_kg, dateStr = getTodayDateString(), notes = '') {
   const db = await getDB();
+  const val = Number(weight_kg);
+
+  // Automatically keep guest profile current_weight_kg in sync
+  try {
+    const pTx = db.transaction('profile', 'readwrite');
+    const pStore = pTx.objectStore('profile');
+    const pReq = pStore.get('current_guest');
+    pReq.onsuccess = () => {
+      if (pReq.result) {
+        pStore.put({
+          ...pReq.result,
+          current_weight_kg: val,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    };
+  } catch (_) {}
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('weight_logs', 'readwrite');
     const store = tx.objectStore('weight_logs');
-    const newLog = {
-      id: generateId(),
-      weight_kg: Number(weight_kg),
-      recorded_at: dateStr,
-      notes: notes || '',
-      created_at: new Date().toISOString(),
+    const getReq = store.getAll();
+    getReq.onsuccess = () => {
+      const all = getReq.result || [];
+      const existing = all.find((l) => (l.recorded_at || '').startsWith(dateStr));
+      if (existing) {
+        const updated = {
+          ...existing,
+          weight_kg: val,
+          notes: notes || existing.notes || '',
+          updated_at: new Date().toISOString(),
+        };
+        const putReq = store.put(updated);
+        putReq.onsuccess = () => resolve(updated);
+        putReq.onerror = () => reject(putReq.error);
+      } else {
+        const newLog = {
+          id: generateId(),
+          weight_kg: val,
+          recorded_at: dateStr,
+          notes: notes || '',
+          created_at: new Date().toISOString(),
+        };
+        const addReq = store.add(newLog);
+        addReq.onsuccess = () => resolve(newLog);
+        addReq.onerror = () => reject(addReq.error);
+      }
     };
-    const req = store.add(newLog);
-    req.onsuccess = () => resolve(newLog);
-    req.onerror = () => reject(req.error);
+    getReq.onerror = () => reject(getReq.error);
   });
 }
 
@@ -361,7 +445,33 @@ export async function deleteGuestWeightLog(id) {
     const tx = db.transaction('weight_logs', 'readwrite');
     const store = tx.objectStore('weight_logs');
     const req = store.delete(id);
-    req.onsuccess = () => resolve(true);
+    req.onsuccess = () => {
+      // Sync latest remaining weight log to profile
+      const listReq = store.getAll();
+      listReq.onsuccess = () => {
+        const remaining = (listReq.result || []).sort(
+          (a, b) => new Date(a.recorded_at) - new Date(b.recorded_at)
+        );
+        if (remaining.length > 0) {
+          const latestWeight = Number(remaining[remaining.length - 1].weight_kg);
+          try {
+            const pTx = db.transaction('profile', 'readwrite');
+            const pStore = pTx.objectStore('profile');
+            const pGet = pStore.get('current_guest');
+            pGet.onsuccess = () => {
+              if (pGet.result) {
+                pStore.put({
+                  ...pGet.result,
+                  current_weight_kg: latestWeight,
+                  updated_at: new Date().toISOString(),
+                });
+              }
+            };
+          } catch (_) {}
+        }
+      };
+      resolve(true);
+    };
     req.onerror = () => reject(req.error);
   });
 }
